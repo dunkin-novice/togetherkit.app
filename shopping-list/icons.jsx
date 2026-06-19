@@ -53,6 +53,13 @@ const Icons = {
     </Svg>
   ),
 
+  Chevron: ({ size = 16, stroke = 2.4, open = true }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+         style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .18s ease' }}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  ),
+
   Share: ({ size = 17, stroke = 2 }) => (
     <Svg size={size} stroke={stroke}>
       <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />

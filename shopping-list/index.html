@@ -104,16 +104,43 @@ function Board({ sx }) {
   const [state, actions] = window.useTogetherStore(sx.homespaceId, sx.me);
   const v = window.buildTogetherView(state, actions, { primary, partner, showDate, members: sx.members, me: sx.me });
 
-  const FilterGroup = ({ label }) => (
-    <div style={isDesktop
-      ? { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }
-      : { display: 'flex', flexDirection: 'column', gap: 7 }}>
-      <span style={isDesktop ? { ...uppercaseLabel, width: 50 } : { ...uppercaseLabel, paddingLeft: 2 }}>{label}</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-        {label === 'Labels' ? <LabelFilters v={v} /> : <StatusFilters v={v} />}
+  // collapsible filter sections — remembered per device
+  const FILT_KEY = 'togetherkit.filterui';
+  const [filtersOpen, setFiltersOpen] = React.useState(() => {
+    try { return { labels: true, status: true, ...(JSON.parse(localStorage.getItem(FILT_KEY)) || {}) }; }
+    catch (e) { return { labels: true, status: true }; }
+  });
+  const toggleFilter = (k) => setFiltersOpen(s => {
+    const n = { ...s, [k]: !s[k] };
+    try { localStorage.setItem(FILT_KEY, JSON.stringify(n)); } catch (e) {}
+    return n;
+  });
+  const filterSummary = (kind) => {
+    if (kind === 'labels') { const f = v.filters.find(x => x.id === state.activeFilter); return f ? f.name : ''; }
+    const s = v.statusFilters.find(x => x.id === state.statusFilter); return s ? s.name : '';
+  };
+
+  const FilterGroup = ({ label, kind }) => {
+    const open = filtersOpen[kind];
+    const summary = filterSummary(kind);
+    return (
+      <div>
+        <button onClick={() => toggleFilter(kind)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: '3px 2px', cursor: 'pointer', fontFamily: 'inherit' }}>
+          <span style={uppercaseLabel}>{label}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: '#bcb3a6' }}>
+            {!open && summary && <span style={{ fontSize: 12, fontWeight: 800, color: '#857c70', background: '#fff', border: '1px solid #ece6db', padding: '3px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>{summary}</span>}
+            <window.Icons.Chevron size={16} open={open} />
+          </span>
+        </button>
+        {open && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 9 }}>
+            {kind === 'labels' ? <LabelFilters v={v} /> : <StatusFilters v={v} />}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="app">
@@ -143,8 +170,8 @@ function Board({ sx }) {
 
           {/* Filters */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 14 : 13 }}>
-            <FilterGroup label="Labels" />
-            <FilterGroup label="Status" />
+            <FilterGroup label="Labels" kind="labels" />
+            <FilterGroup label="Status" kind="status" />
             {isDesktop && v.labelsOpen && <LabelsPanel v={v} maxWidth={560} />}
           </div>
           {!isDesktop && v.labelsOpen && <LabelsPanel v={v} />}
