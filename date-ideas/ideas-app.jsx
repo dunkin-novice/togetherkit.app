@@ -95,7 +95,7 @@ const SEED_CATS = [
 ];
 
 /* ── row ⇄ model mappers ──────────────────────────────────────────────────── */
-const rowToIdea = (r) => ({ id: r.id, name: r.name, catId: r.cat_id, byUser: r.by_user, byName: r.by_name, date: r.date, scheduled: !!r.scheduled, schedText: r.sched_text || '', schedNote: r.sched_note || '', important: !!r.important, image: r.image, mapsUrl: r.maps_url || '', siteUrl: r.site_url || '', pos: Number(r.pos) || 0 });
+const rowToIdea = (r) => ({ id: r.id, name: r.name, catId: r.cat_id, byUser: r.by_user, byName: r.by_name, date: r.date, scheduled: !!r.scheduled, schedText: r.sched_text || '', schedAt: r.sched_at || null, schedNote: r.sched_note || '', important: !!r.important, image: r.image, mapsUrl: r.maps_url || '', siteUrl: r.site_url || '', pos: Number(r.pos) || 0 });
 const ideaToRow = (it, hs) => ({ id: it.id, homespace_id: hs, name: it.name, cat_id: it.catId, by_user: it.byUser, by_name: it.byName, date: it.date, scheduled: !!it.scheduled, sched_text: it.schedText || null, sched_note: it.schedNote || null, important: !!it.important, image: it.image, maps_url: it.mapsUrl || null, site_url: it.siteUrl || null, pos: it.pos || 0 });
 const rowToCat = (r) => ({ id: r.id, name: r.name, tone: r.tone, custom: !!r.custom, sort: r.sort });
 const catToRow = (c, hs, sort) => ({ homespace_id: hs, id: c.id, name: c.name, tone: c.tone, custom: !!c.custom, sort: sort != null ? sort : (c.sort || 0) });
@@ -723,7 +723,7 @@ function buildView(state, actions, opts) {
   const decorate = (it) => {
     const u = resolveBy(it.byUser, it.byName); const cat = catById[it.catId]; const tone = toneOf(cat);
     return {
-      id: it.id, name: it.name, scheduled: it.scheduled, schedText: it.schedText, important: it.important,
+      id: it.id, name: it.name, scheduled: it.scheduled, schedText: it.schedText, schedAt: it.schedAt, important: it.important,
       image: it.image, mapsUrl: it.mapsUrl, siteUrl: it.siteUrl, date: it.date,
       catName: cat ? cat.name : '—', tone, byName: u.name, byColor: u.color, byInitial: (u.name[0] || '?').toUpperCase(),
       open: () => actions.set({ detailId: it.id, editing: false }),
@@ -779,6 +779,8 @@ function buildView(state, actions, opts) {
     s: state, a: actions, allById, primary, partner, members, me,
     stop: (e) => e.stopPropagation(),
     ideas, catFilters, statusFilters, catOptions, manageCats,
+    // all scheduled ideas (ignores list filters) — for the calendar view
+    scheduledList: state.ideas.filter(i => i.scheduled && i.schedAt).map(decorate),
     isEmpty: vis.length === 0,
     emptyText: (af === 'all' && sf === 'all') ? 'No ideas yet. Add the first thing you two want to do.' : 'Nothing matches these filters.',
     listHeading, planLabel: ideaCount + ' to plan',
@@ -821,9 +823,98 @@ function FilterGroup({ label, kind, v, open, onToggle, summary }) {
   );
 }
 const FILT_KEY = 'togetherkit.ideas.filterui';
+/* ── calendar view (shared planned dates, from the app's own data) ─────────── */
+function CalendarView({ items, month, onPrev, onNext, onToday, primary, partner, members, me, onOpen }) {
+  const y = month.getFullYear(), m = month.getMonth();
+  const firstDay = new Date(y, m, 1).getDay();              // 0 = Sun
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const today = new Date();
+  const isToday = (d) => today.getFullYear() === y && today.getMonth() === m && today.getDate() === d;
+
+  const byDay = {};
+  items.forEach(it => { const d = new Date(it.schedAt); if (!isNaN(d) && d.getFullYear() === y && d.getMonth() === m) (byDay[d.getDate()] = byDay[d.getDate()] || []).push(it); });
+  const agenda = items.map(it => ({ it, d: new Date(it.schedAt) })).filter(x => !isNaN(x.d) && x.d.getFullYear() === y && x.d.getMonth() === m).sort((a, b) => a.d - b.d);
+
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const navBtn = { width: 36, height: 36, borderRadius: 11, border: '1px solid #ece6db', background: '#fff', color: '#7a7166', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
+  const wd = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button onClick={onPrev} style={navBtn} title="Previous month"><span style={{ transform: 'rotate(90deg)', display: 'flex' }}><DIcons.Chevron size={16} /></span></button>
+        <button onClick={onToday} title="Jump to today" style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+          <span style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 20, fontWeight: 700, color: '#3a352f' }}>{MONS[m]} {y}</span>
+        </button>
+        <button onClick={onNext} style={navBtn} title="Next month"><span style={{ transform: 'rotate(-90deg)', display: 'flex' }}><DIcons.Chevron size={16} /></span></button>
+      </div>
+
+      <div style={{ background: '#fff', borderRadius: 18, padding: 12, boxShadow: '0 1px 2px rgba(58,53,47,.05),0 8px 22px rgba(58,53,47,.05)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 6 }}>
+          {wd.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: '#b3a99c' }}>{w}</div>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+          {cells.map((d, i) => {
+            if (!d) return <div key={'e' + i} />;
+            const dayItems = byDay[d] || [];
+            const has = dayItems.length > 0;
+            return (
+              <button key={d} onClick={has ? () => onOpen(dayItems[0].id) : undefined} disabled={!has}
+                style={{ aspectRatio: '1 / 1', minHeight: 42, border: 'none', borderRadius: 10, cursor: has ? 'pointer' : 'default', fontFamily: 'inherit', padding: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, background: isToday(d) ? '#f4e8dd' : (has ? '#faf7f2' : 'transparent') }}>
+                <span style={{ fontSize: 13, fontWeight: isToday(d) ? 800 : 600, color: isToday(d) ? '#a8794f' : '#3a352f' }}>{d}</span>
+                {has && (
+                  <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    {dayItems.slice(0, 3).map((it, k) => <span key={k} style={{ width: 5, height: 5, borderRadius: '50%', background: it.byColor }} />)}
+                    {dayItems.length > 3 && <span style={{ fontSize: 8, color: '#b3a99c', fontWeight: 800 }}>+{dayItems.length - 3}</span>}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {members && members.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '0 4px' }}>
+          {members.slice(0, 2).map(mem => (
+            <span key={mem.uid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: mem.idx === 0 ? primary : partner }} />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#7a7166' }}>{me && mem.uid === me.uid ? 'You' : mem.name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <span style={upper}>This month</span>
+        {agenda.length ? agenda.map(({ it, d }) => (
+          <button key={it.id} onClick={() => onOpen(it.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#fff', borderRadius: 14, border: '1px solid transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.035)' }}>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 38 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#b3a99c', textTransform: 'uppercase' }}>{DAYS[d.getDay()]}</span>
+              <span style={{ fontSize: 19, fontWeight: 800, color: '#3a352f', lineHeight: 1 }}>{d.getDate()}</span>
+            </span>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.byColor, flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#3a352f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</div>
+              <div style={{ fontSize: 12.5, color: '#9a9186', fontWeight: 600, marginTop: 2 }}>{(it.schedText || it.catName)} · {it.byName}</div>
+            </span>
+          </button>
+        )) : <EmptyState text="No dates planned this month. Schedule a date idea to see it here." pad="28px 20px" />}
+      </div>
+    </div>
+  );
+}
+
 function Board({ v, isDesktop, primary, partner }) {
   const [open, setOpen] = useState(() => { try { return { cats: true, status: true, ...(JSON.parse(localStorage.getItem(FILT_KEY)) || {}) }; } catch (e) { return { cats: true, status: true }; } });
   const toggle = (k) => setOpen(s => { const n = { ...s, [k]: !s[k] }; try { localStorage.setItem(FILT_KEY, JSON.stringify(n)); } catch (e) {} return n; });
+  const [viewMode, setViewMode] = useState('list');
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const shiftMonth = (n) => setMonth(mo => new Date(mo.getFullYear(), mo.getMonth() + n, 1));
+  const goToday = () => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); };
   const catSummary = (v.catFilters.find(x => x.id === v.s.activeFilter) || {}).name || '';
   const statSummary = (v.statusFilters.find(x => x.id === v.s.statusFilter) || {}).name || '';
   const addBtn = isDesktop
@@ -851,6 +942,23 @@ function Board({ v, isDesktop, primary, partner }) {
           </div>
         </Fragment>
       )}
+      {/* List ⇄ Calendar toggle */}
+      <div style={{ display: 'flex', gap: 4, background: '#efe9e0', borderRadius: 12, padding: 4, alignSelf: isDesktop ? 'flex-start' : 'stretch' }}>
+        {[['list', 'List'], ['calendar', 'Calendar']].map(([id, label]) => (
+          <button key={id} onClick={() => setViewMode(id)}
+            style={{ flex: isDesktop ? '0 0 auto' : 1, padding: '8px 18px', borderRadius: 9, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 800, background: viewMode === id ? '#fff' : 'transparent', color: viewMode === id ? '#a8794f' : '#9a9186', boxShadow: viewMode === id ? '0 1px 2px rgba(58,53,47,.08)' : 'none' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {viewMode === 'calendar' && (
+        <CalendarView items={v.scheduledList} month={month} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} onToday={goToday}
+                      primary={primary} partner={partner} members={v.members} me={v.me} onOpen={(id) => v.a.set({ detailId: id, editing: false })} />
+      )}
+
+      {viewMode === 'list' && (
+      <Fragment>
       <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 14 : 13 }}>
         <FilterGroup label="Categories" kind="cats" v={v} open={open.cats} onToggle={() => toggle('cats')} summary={catSummary} />
         <FilterGroup label="Status" kind="status" v={v} open={open.status} onToggle={() => toggle('status')} summary={statSummary} />
@@ -889,6 +997,8 @@ function Board({ v, isDesktop, primary, partner }) {
             {v.isEmpty && <EmptyState text={v.emptyText} pad="34px 20px" />}
           </div>
         </Fragment>
+      )}
+      </Fragment>
       )}
     </div>
   );
