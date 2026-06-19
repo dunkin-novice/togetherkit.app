@@ -35,7 +35,12 @@ const newId = () => (window.crypto && crypto.randomUUID)
 const appUrl = () => location.origin + location.pathname;
 
 const auth = {
-  signInGoogle: () => client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl() + location.search } }),
+  signInGoogle: () => {
+    // Preserve a pending ?invite across the Google round-trip (belt-and-braces:
+    // it's also kept in the redirectTo query) so joining a homespace is reliable.
+    try { const inv = new URLSearchParams(location.search).get('invite'); if (inv) localStorage.setItem('togetherkit.pendinginvite', inv); } catch (e) {}
+    return client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl() + location.search } });
+  },
   signInPassword: (email, password) => client.auth.signInWithPassword({ email, password }), // used for local testing
   signOut: () => client.auth.signOut(),
 };

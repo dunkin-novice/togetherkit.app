@@ -44,16 +44,20 @@ function useTogetherSession() {
         if (!existing.data) await client.from('profiles').insert({ id: u.id, display_name: fallbackName, avatar_url: avatar });
         else if (!existing.data.display_name) await client.from('profiles').update({ display_name: fallbackName, avatar_url: avatar }).eq('id', u.id);
 
-        // homespace: invite link wins, then remembered, then own
+        // homespace: invite link wins, then remembered, then own. The invite may
+        // arrive in the URL or, after a Google round-trip, from local storage.
         const params = new URLSearchParams(location.search);
-        const invite = params.get('invite');
+        let invite = params.get('invite');
+        try { if (!invite) invite = localStorage.getItem('togetherkit.pendinginvite'); } catch (e) {}
         let hs = null;
         if (invite) {
-          const { data } = await client.rpc('redeem_invite', { p_token: invite });
-          hs = data;
-          params.delete('invite');
-          const q = params.toString();
-          history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+          try { const { data } = await client.rpc('redeem_invite', { p_token: invite }); hs = data; } catch (e) {}
+          try { localStorage.removeItem('togetherkit.pendinginvite'); } catch (e) {}
+          if (params.get('invite')) {
+            params.delete('invite');
+            const q = params.toString();
+            history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+          }
         }
         if (!hs) { try { hs = localStorage.getItem(HS_KEY); } catch (e) {} }
         if (hs) { // make sure we're actually a member of the remembered space
