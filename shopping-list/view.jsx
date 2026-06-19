@@ -41,7 +41,7 @@ function buildTogetherView(state, actions, opts) {
   const indexed = visibleSrc.map((it, i) => ({ it, i }));
   if (sortMode === 'smart') indexed.sort((a, b) => (rankOf(a.it) - rankOf(b.it)) || (a.i - b.i));
   else if (sortMode === 'az') indexed.sort((a, b) => a.it.name.localeCompare(b.it.name));
-  else if (sortMode === 'new') indexed.sort((a, b) => b.it.id - a.it.id);
+  else if (sortMode === 'new') indexed.sort((a, b) => (b.it.pos || 0) - (a.it.pos || 0));
   const visible = indexed.map(x => x.it);
 
   const items = visible.map(it => {
