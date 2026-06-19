@@ -74,9 +74,8 @@ function AccountButton({ sx, onOpen }) {
   const meIdx = Math.max(0, sx.members.findIndex(m => sx.me && m.uid === sx.me.uid));
   return (
     <button onClick={onOpen} title="Account & invite"
-      style={{ position: 'fixed', top: 24, left: 24, zIndex: 900, height: 46, padding: '0 14px 0 8px', borderRadius: 999, border: '1px solid #ecd9c4', background: '#fffaf3', display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
-      <Avatar name={sx.me ? sx.me.name : '?'} idx={meIdx} size={30} />
-      <span style={{ fontWeight: 800, fontSize: 13.5, color: '#3a352f', maxWidth: 110, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sx.me ? sx.me.name : ''}</span>
+      style={{ position: 'fixed', top: 24, left: 24, zIndex: 900, width: 46, height: 46, padding: 0, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
+      <Avatar name={sx.me ? sx.me.name : '?'} idx={meIdx} size={32} />
     </button>
   );
 }
