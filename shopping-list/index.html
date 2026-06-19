@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Together — Shared shopping list</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="store.jsx"></script>
+<script type="text/babel" src="view.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="modals.jsx"></script>
+
+<script type="text/babel">
+// Together — shared shopping list. A single responsive screen: below 720px it
+// renders the mobile card layout, at/above it the desktop table layout. The
+// design's three configurable props (primaryColor, partnerColor, showCreatedDate)
+// are exposed through the shared Tweaks panel.
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "primaryColor": "#c98a5c",
+  "partnerColor": "#8a9b6e",
+  "showCreatedDate": true
+}/*EDITMODE-END*/;
+
+function useIsDesktop(breakpoint = 720) {
+  const get = () => typeof window !== 'undefined' && window.innerWidth >= breakpoint;
+  const [isDesktop, setIsDesktop] = React.useState(get);
+  React.useEffect(() => {
+    const onResize = () => setIsDesktop(get());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return isDesktop;
+}
+
+function App() {
+  const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+  const { TweaksPanel, TweakSection, TweakColor, TweakToggle } = window;
+  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, uppercaseLabel } = window.TogetherUI;
+  const { AddModal, BulkModal, DetailModal, ImageModal, BugModal } = window.TogetherModals;
+
+  const primary = tweaks.primaryColor || '#c98a5c';
+  const partner = tweaks.partnerColor || '#8a9b6e';
+  const showDate = tweaks.showCreatedDate !== false;
+  const isDesktop = useIsDesktop();
+
+  // Expose the brand colors as CSS vars so static stylesheet rules pick them up.
+  React.useEffect(() => {
+    document.documentElement.style.setProperty('--primary', primary);
+    document.documentElement.style.setProperty('--partner', partner);
+  }, [primary, partner]);
+
+  const [state, actions] = window.useTogetherStore();
+  const v = window.buildTogetherView(state, actions, { primary, partner, showDate });
+
+  const FilterGroup = ({ label }) => (
+    <div style={isDesktop
+      ? { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }
+      : { display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <span style={isDesktop ? { ...uppercaseLabel, width: 50 } : { ...uppercaseLabel, paddingLeft: 2 }}>{label}</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        {label === 'Labels' ? <LabelFilters v={v} /> : <StatusFilters v={v} />}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="app">
+      <div className="app-shell">
+        <div className="app-body">
+
+          {/* Header + actions */}
+          {isDesktop ? (
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
+              <Brand titleSize={34} subSize={15} dot={20} />
+              <div style={{ display: 'flex', gap: 11 }}>
+                <button onClick={v.openAdd} style={v.addItemBtnDeskStyle}><window.Icons.Plus size={17} />Add Item</button>
+                <button onClick={v.openBulk} style={v.bulkBtnDeskStyle}><window.Icons.Plus size={17} />Bulk Add</button>
+              </div>
+            </div>
+          ) : (
+            <React.Fragment>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}>
+                <Brand titleSize={31} subSize={14} dot={18} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={v.openAdd} style={v.addItemBtnStyle}><window.Icons.Plus size={16} />Add Item</button>
+                <button onClick={v.openBulk} style={v.bulkBtnStyle}><window.Icons.Plus size={16} />Bulk Add</button>
+              </div>
+            </React.Fragment>
+          )}
+
+          {/* Filters */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 14 : 13 }}>
+            <FilterGroup label="Labels" />
+            <FilterGroup label="Status" />
+            {isDesktop && v.labelsOpen && <LabelsPanel v={v} maxWidth={560} />}
+          </div>
+          {!isDesktop && v.labelsOpen && <LabelsPanel v={v} />}
+
+          {/* List */}
+          {isDesktop ? (
+            <div style={{ background: '#fff', borderRadius: 22, padding: '6px 22px 12px', boxShadow: 'var(--shadow-md)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,1fr) 84px 128px 168px 132px 30px', gap: 14, alignItems: 'center', padding: '16px 6px', borderBottom: '1px solid #f0ebe2' }}>
+                <span />
+                {['Item', 'Qty', 'Label', 'Added by', 'Status'].map(h => (
+                  <span key={h} style={{ fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.7px', textTransform: 'uppercase' }}>{h}</span>
+                ))}
+                <span />
+              </div>
+              {v.items.map(item => <ItemRow key={item.id} item={item} showDate={showDate} />)}
+              {v.isEmpty && <EmptyState text={v.emptyText} pad="44px 20px" />}
+            </div>
+          ) : (
+            <React.Fragment>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 4px', gap: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#857c70', letterSpacing: '.6px', textTransform: 'uppercase' }}>{v.listHeading}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <select value={v.sortMode} onChange={v.setSortMode} style={{ background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 9px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, outline: 'none', cursor: 'pointer' }}>
+                    {v.sortOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#b07d42', background: '#f6ebdc', padding: '4px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>{v.toBuyLabel}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {v.items.map(item => <ItemCard key={item.id} item={item} showDate={showDate} />)}
+                {v.isEmpty && <EmptyState text={v.emptyText} pad="34px 20px" />}
+              </div>
+            </React.Fragment>
+          )}
+
+        </div>
+      </div>
+
+      {/* shared unit suggestions for the qty/unit inputs */}
+      <datalist id="together-units">
+        {v.unitSuggestions.map(u => <option key={u} value={u} />)}
+      </datalist>
+
+      {/* fixed bug-report button */}
+      <button onClick={v.openBug} title="Report a problem"
+              style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
+        <window.Icons.Bug size={21} />
+      </button>
+
+      <AddModal v={v} />
+      <BulkModal v={v} />
+      <DetailModal v={v} />
+      <ImageModal v={v} />
+      <BugModal v={v} />
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection label="People">
+          <TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)}
+                      options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} />
+          <TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)}
+                      options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} />
+        </TweakSection>
+        <TweakSection label="List">
+          <TweakToggle label="Show created date" value={tweaks.showCreatedDate}
+                       onChange={(b) => setTweak('showCreatedDate', b)} />
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
