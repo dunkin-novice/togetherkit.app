@@ -98,11 +98,13 @@ function AccountSheet({ sx, onClose }) {
   const [copied, setCopied] = React.useState(false);
   const [making, setMaking] = React.useState(false);
   const [nameSaved, setNameSaved] = React.useState(false);
+  const [spaceSaved, setSpaceSaved] = React.useState(false);
   const stop = (e) => e.stopPropagation();
 
   const nameDirty = !!name.trim() && name.trim() !== (sx.me && sx.me.name);
   const saveName = () => { if (!nameDirty) return; sx.actions.setMyName(name.trim()); setNameSaved(true); setTimeout(() => setNameSaved(false), 1800); };
-  const saveSpace = () => { const n = space.trim(); if (n && n !== (sx.homespace && sx.homespace.name)) sx.actions.setSpaceName(n); };
+  const spaceDirty = !!space.trim() && space.trim() !== (sx.homespace && sx.homespace.name);
+  const saveSpace = () => { if (!spaceDirty) return; sx.actions.setSpaceName(space.trim()); setSpaceSaved(true); setTimeout(() => setSpaceSaved(false), 1800); };
 
   const invite = async () => {
     setMaking(true);
@@ -135,7 +137,13 @@ function AccountSheet({ sx, onClose }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <span style={aUpper}>Space name</span>
-            <input value={space} onChange={(e) => setSpace(e.target.value)} onBlur={saveSpace} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} style={aInput} placeholder="Our space" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={space} onChange={(e) => { setSpace(e.target.value); setSpaceSaved(false); }} onKeyDown={(e) => { if (e.key === 'Enter') saveSpace(); }} style={{ ...aInput, flex: 1 }} placeholder="Our space" />
+              <button onClick={saveSpace} disabled={!spaceDirty && !spaceSaved}
+                style={{ flexShrink: 0, background: spaceSaved ? 'var(--partner)' : (spaceDirty ? 'var(--primary)' : '#ece6db'), color: (spaceDirty || spaceSaved) ? '#fff' : '#b3a99c', border: 'none', borderRadius: 12, padding: '0 18px', fontWeight: 800, fontSize: 14, cursor: spaceDirty ? 'pointer' : 'default', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                {spaceSaved ? 'Saved ✓' : 'Save'}
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             <span style={aUpper}>Members</span>

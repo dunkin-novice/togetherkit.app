@@ -119,8 +119,22 @@ function useTogetherSession() {
   const actions = React.useMemo(() => ({
     signInGoogle: () => BE.auth.signInGoogle(),
     signOut: async () => { try { localStorage.removeItem(HS_KEY); } catch (e) {} await BE.auth.signOut(); },
-    setMyName: (name) => client.from('profiles').update({ display_name: name }).eq('id', session.user.id),
-    setSpaceName: (name) => client.from('homespaces').update({ name }).eq('id', homespaceId),
+    // Update + reflect locally right away. We can't rely on a realtime event for
+    // profiles/homespaces (those tables aren't in the realtime publication), so
+    // the optimistic state update is what makes the rename actually show.
+    setMyName: async (name) => {
+      const r = await client.from('profiles').update({ display_name: name }).eq('id', session.user.id);
+      if (r.error) { console.warn('[togetherkit] setMyName failed:', r.error.message); return r; }
+      setProfile(p => (p ? { ...p, display_name: name } : { id: session.user.id, display_name: name }));
+      setMembers(ms => ms.map(m => m.uid === session.user.id ? { ...m, name } : m));
+      return r;
+    },
+    setSpaceName: async (name) => {
+      const r = await client.from('homespaces').update({ name }).eq('id', homespaceId);
+      if (r.error) { console.warn('[togetherkit] setSpaceName failed:', r.error.message); return r; }
+      setHomespace(h => (h ? { ...h, name } : { id: homespaceId, name }));
+      return r;
+    },
     createInvite: async () => {
       const token = 'inv-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
       const r = await client.from('invites').insert({ token, homespace_id: homespaceId, created_by: session.user.id });
