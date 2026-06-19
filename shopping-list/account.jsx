@@ -24,6 +24,16 @@ const GoogleMark = () => (
 
 // Full-screen sign-in gate
 function SignIn({ onGoogle }) {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  const go = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await onGoogle();
+      if (r && r.error) { setErr(r.error.message); setBusy(false); }
+      // on success the page redirects to Google, so we leave `busy` true
+    } catch (e) { setErr((e && e.message) || String(e)); setBusy(false); }
+  };
   return (
     <div className="app" style={{ alignItems: 'center' }}>
       <div className="app-shell" style={{ maxWidth: 420 }}>
@@ -31,10 +41,15 @@ function SignIn({ onGoogle }) {
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}><window.Icons.Logo size={24} /></div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 700, margin: 0, color: '#3a352f', letterSpacing: '.3px' }}>Together</h1>
           <p style={{ margin: '0 0 22px', fontSize: 15, color: '#9a9186', fontWeight: 600, maxWidth: 280, lineHeight: 1.45 }}>A shared shopping list for two. Sign in, then invite your soulmate to your homespace.</p>
-          <button onClick={onGoogle}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', maxWidth: 300, background: '#fff', color: '#3a352f', border: '1px solid #e6ded2', borderRadius: 14, padding: '14px', fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.05)' }}>
-            <GoogleMark /> Sign in with Google
+          <button onClick={go} disabled={busy}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', maxWidth: 300, background: '#fff', color: '#3a352f', border: '1px solid #e6ded2', borderRadius: 14, padding: '14px', fontWeight: 800, fontSize: 15, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.05)' }}>
+            <GoogleMark /> {busy ? 'Opening Google…' : 'Sign in with Google'}
           </button>
+          {err && (
+            <p style={{ margin: '4px 0 0', fontSize: 12.5, fontWeight: 700, color: '#a85a4a', maxWidth: 300, lineHeight: 1.45 }}>
+              Couldn’t start Google sign-in{/provider is not enabled|Unsupported provider/i.test(err) ? ' — Google isn’t switched on yet.' : ': ' + err}
+            </p>
+          )}
         </div>
       </div>
     </div>
