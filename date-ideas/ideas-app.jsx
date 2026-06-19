@@ -57,7 +57,7 @@ function gcalUrl(name, dateStr, startStr, endStr, opts) {
 }
 
 /* ── icons ────────────────────────────────────────────────────────────────── */
-function Svg({ size = 18, stroke = 2, fill = 'none', color, children }) {
+function DSvg({ size = 18, stroke = 2, fill = 'none', color, children }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
          stroke={fill === 'none' ? (color || 'currentColor') : 'none'}
@@ -65,19 +65,19 @@ function Svg({ size = 18, stroke = 2, fill = 'none', color, children }) {
   );
 }
 const STAR = 'M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 18.7 6 21.8l1.2-6.6L2.4 9.5l6.6-.9z';
-const Icons = {
-  Plus: ({ size = 16, stroke = 2.6 }) => <Svg size={size} stroke={stroke}><path d="M12 5v14M5 12h14" /></Svg>,
+const DIcons = {
+  Plus: ({ size = 16, stroke = 2.6 }) => <DSvg size={size} stroke={stroke}><path d="M12 5v14M5 12h14" /></DSvg>,
   Star: ({ size = 19, filled = false, color }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? (color || '#e0a93b') : 'none'} stroke={filled ? (color || '#e0a93b') : (color || '#c9bca6')} strokeWidth={filled ? 1.5 : 1.8} strokeLinejoin="round"><path d={STAR} /></svg>
   ),
-  Camera: ({ size = 13, stroke = 2.2, color }) => (<Svg size={size} stroke={stroke} color={color}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></Svg>),
-  Pin: ({ size = 14, stroke = 2, color }) => (<Svg size={size} stroke={stroke} color={color}><path d="M12 21s-6-5.7-6-10a6 6 0 1 1 12 0c0 4.3-6 10-6 10z" /><circle cx="12" cy="11" r="2.2" /></Svg>),
-  Globe: ({ size = 14, stroke = 2, color }) => (<Svg size={size} stroke={stroke} color={color}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.4 2.5 15 0 18M12 3c-2.5 2.4-2.5 15 0 18" /></Svg>),
-  Calendar: ({ size = 13, stroke = 2, color }) => (<Svg size={size} stroke={stroke} color={color}><rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9h18M8 2.5v4M16 2.5v4" /></Svg>),
+  Camera: ({ size = 13, stroke = 2.2, color }) => (<DSvg size={size} stroke={stroke} color={color}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></DSvg>),
+  Pin: ({ size = 14, stroke = 2, color }) => (<DSvg size={size} stroke={stroke} color={color}><path d="M12 21s-6-5.7-6-10a6 6 0 1 1 12 0c0 4.3-6 10-6 10z" /><circle cx="12" cy="11" r="2.2" /></DSvg>),
+  Globe: ({ size = 14, stroke = 2, color }) => (<DSvg size={size} stroke={stroke} color={color}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.4 2.5 15 0 18M12 3c-2.5 2.4-2.5 15 0 18" /></DSvg>),
+  Calendar: ({ size = 13, stroke = 2, color }) => (<DSvg size={size} stroke={stroke} color={color}><rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9h18M8 2.5v4M16 2.5v4" /></DSvg>),
   Heart: ({ size = 14, stroke = 2, color, fill }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill={fill || 'none'} stroke={color || 'currentColor'} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 7.6 3 4.5 6.2 4.5c1.9 0 3.2 1 3.8 2.3.6-1.3 1.9-2.3 3.8-2.3 3.2 0 4.9 3.1 3.4 6.5C19 15.4 12 20 12 20z" /></svg>),
-  Check: ({ size = 14, stroke = 3, color }) => <Svg size={size} stroke={stroke} color={color}><path d="M4 12l5 5 11-12" /></Svg>,
+  Check: ({ size = 14, stroke = 3, color }) => <DSvg size={size} stroke={stroke} color={color}><path d="M4 12l5 5 11-12" /></DSvg>,
   Chevron: ({ size = 16, stroke = 2.4, open = true }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .18s ease' }}><path d="M6 9l6 6 6-6" /></svg>),
-  Bug: ({ size = 21, stroke = 1.8 }) => (<Svg size={size} stroke={stroke}><path d="M12 7.5v12.5" /><ellipse cx="12" cy="13.5" rx="5" ry="6.5" /><path d="M7 11 3 8.5M17 11l4-2.5M7 14.5H2.5M17 14.5h4.5M7.6 18 4 20.5M16.4 18 20 20.5" /><path d="M9 6.2a3 3 0 0 1 6 0" /></Svg>),
+  Bug: ({ size = 21, stroke = 1.8 }) => (<DSvg size={size} stroke={stroke}><path d="M12 7.5v12.5" /><ellipse cx="12" cy="13.5" rx="5" ry="6.5" /><path d="M7 11 3 8.5M17 11l4-2.5M7 14.5H2.5M17 14.5h4.5M7.6 18 4 20.5M16.4 18 20 20.5" /><path d="M9 6.2a3 3 0 0 1 6 0" /></DSvg>),
   Logo: ({ size = 18, primary, partner }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
       <span style={{ width: size, height: size, borderRadius: '50%', background: primary }} />
@@ -251,7 +251,7 @@ const modalTitle = { fontFamily: "'Quicksand',sans-serif", fontSize: 23, fontWei
 const openUrl = (e, url) => { e.stopPropagation(); if (url) window.open(url, '_blank', 'noopener'); };
 
 /* ── small presentational pieces ──────────────────────────────────────────── */
-function Avatar({ color, initial, size = 20 }) {
+function DAvatar({ color, initial, size = 20 }) {
   return <span style={{ width: size, height: size, borderRadius: '50%', background: color, color: '#fff', fontWeight: 800, fontSize: size * 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initial}</span>;
 }
 function StatusPill({ idea }) {
@@ -259,23 +259,23 @@ function StatusPill({ idea }) {
   const st = sched ? { background: '#e7ede0', color: '#6f7d52' } : { background: '#f6ebdc', color: '#b07d42' };
   return (
     <span style={{ padding: '5px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 800, letterSpacing: '.3px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 5, ...st }}>
-      {sched ? <Icons.Calendar size={12} /> : null}{sched ? idea.schedText : 'Idea'}
+      {sched ? <DIcons.Calendar size={12} /> : null}{sched ? idea.schedText : 'Idea'}
     </span>
   );
 }
 function CalCircle({ scheduled, partner, onClick, size = 26 }) {
   return (
     <button onClick={onClick} title={scheduled ? 'Scheduled' : 'Schedule this'} style={{ width: size, height: size, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all .15s', border: scheduled ? ('2px solid ' + partner) : '2px solid #dcd4c6', background: scheduled ? partner : '#fff' }}>
-      {scheduled ? <Icons.Check size={14} color="#fff" /> : <Icons.Calendar size={13} color="#c2b59f" />}
+      {scheduled ? <DIcons.Check size={14} color="#fff" /> : <DIcons.Calendar size={13} color="#c2b59f" />}
     </button>
   );
 }
 function LinkButtons({ idea }) {
   return (
     <Fragment>
-      {idea.image && <button onClick={idea.openImg} title="View photo" style={thumbBtn}><Icons.Camera size={13} /></button>}
-      {idea.mapsUrl && <button onClick={(e) => openUrl(e, idea.mapsUrl)} title="Open in Maps" style={thumbBtn}><Icons.Pin size={13} color="#b59a7d" /></button>}
-      {idea.siteUrl && <button onClick={(e) => openUrl(e, idea.siteUrl)} title="Visit site" style={thumbBtn}><Icons.Globe size={13} color="#b59a7d" /></button>}
+      {idea.image && <button onClick={idea.openImg} title="View photo" style={thumbBtn}><DIcons.Camera size={13} /></button>}
+      {idea.mapsUrl && <button onClick={(e) => openUrl(e, idea.mapsUrl)} title="Open in Maps" style={thumbBtn}><DIcons.Pin size={13} color="#b59a7d" /></button>}
+      {idea.siteUrl && <button onClick={(e) => openUrl(e, idea.siteUrl)} title="Visit site" style={thumbBtn}><DIcons.Globe size={13} color="#b59a7d" /></button>}
     </Fragment>
   );
 }
@@ -292,13 +292,13 @@ function IdeaCard({ idea, partner }) {
           <span style={{ ...chipBase, background: idea.tone.bg, color: idea.tone.fg }}>{idea.catName}</span>
           {idea.important && <span style={importantTag}>Important</span>}
           <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#9a9186', fontSize: 12, fontWeight: 600 }}>
-            <Avatar color={idea.byColor} initial={idea.byInitial} size={20} />{idea.byName}
+            <DAvatar color={idea.byColor} initial={idea.byInitial} size={20} />{idea.byName}
             <span style={{ color: '#c3bbae' }}>· {idea.date}</span>
           </span>
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-        <button onClick={idea.star} title="Mark important" style={iconBtn}><Icons.Star size={19} filled={idea.important} /></button>
+        <button onClick={idea.star} title="Mark important" style={iconBtn}><DIcons.Star size={19} filled={idea.important} /></button>
         <StatusPill idea={idea} />
       </div>
     </div>
@@ -315,11 +315,11 @@ function IdeaRow({ idea, partner }) {
       </span>
       <span><span style={{ ...chipBase, background: idea.tone.bg, color: idea.tone.fg }}>{idea.catName}</span></span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: '#7a7166', fontSize: 13, fontWeight: 600, minWidth: 0 }}>
-        <Avatar color={idea.byColor} initial={idea.byInitial} size={26} />
+        <DAvatar color={idea.byColor} initial={idea.byInitial} size={26} />
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{idea.byName}<span style={{ color: '#b8b0a3' }}> · {idea.date}</span></span>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <button onClick={idea.star} title="Mark important" style={{ ...iconBtn, flexShrink: 0 }}><Icons.Star size={18} filled={idea.important} /></button>
+        <button onClick={idea.star} title="Mark important" style={{ ...iconBtn, flexShrink: 0 }}><DIcons.Star size={18} filled={idea.important} /></button>
         <StatusPill idea={idea} />
       </span>
       <button onClick={idea.remove} style={{ background: 'none', border: 'none', color: '#cfc7ba', fontSize: 18, cursor: 'pointer', padding: 2, lineHeight: 1 }}>×</button>
@@ -337,7 +337,7 @@ function CategoryFilters({ v }) {
 function StatusFilters({ v }) {
   return (
     <Fragment>
-      {v.statusFilters.map(s => (<button key={s.id} onClick={s.select} style={s.chipStyle}>{s.star && <Icons.Star size={13} filled color="currentColor" />}{s.name}<span style={s.countStyle}>{s.count}</span></button>))}
+      {v.statusFilters.map(s => (<button key={s.id} onClick={s.select} style={s.chipStyle}>{s.star && <DIcons.Star size={13} filled color="currentColor" />}{s.name}<span style={s.countStyle}>{s.count}</span></button>))}
     </Fragment>
   );
 }
@@ -411,7 +411,7 @@ function AddModal({ v, primary }) {
               {v.catOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
               <option value="__new__">+ New type…</option>
             </select>
-            <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><Icons.Chevron size={15} /></span>
+            <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><DIcons.Chevron size={15} /></span>
           </div>
           {showNew && (
             <div style={{ display: 'flex', gap: 8 }}>
@@ -419,8 +419,8 @@ function AddModal({ v, primary }) {
               <button onClick={createType} disabled={!newType.trim()} style={{ flexShrink: 0, background: newType.trim() ? primary : '#d9cfc0', color: '#fff', border: 'none', borderRadius: 13, padding: '0 18px', fontWeight: 800, fontSize: 14, cursor: newType.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>Add</button>
             </div>
           )}
-          <FieldWithIcon icon={<Icons.Pin size={16} />} value={d.mapsUrl} onChange={(e) => v.a.setDraft({ mapsUrl: e.target.value })} placeholder="Google Maps link · optional" />
-          <FieldWithIcon icon={<Icons.Globe size={16} />} value={d.siteUrl} onChange={(e) => v.a.setDraft({ siteUrl: e.target.value })} placeholder="Website link · optional" />
+          <FieldWithIcon icon={<DIcons.Pin size={16} />} value={d.mapsUrl} onChange={(e) => v.a.setDraft({ mapsUrl: e.target.value })} placeholder="Google Maps link · optional" />
+          <FieldWithIcon icon={<DIcons.Globe size={16} />} value={d.siteUrl} onChange={(e) => v.a.setDraft({ siteUrl: e.target.value })} placeholder="Website link · optional" />
           {d.image ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, background: '#fff', border: '1px solid #ece6db', borderRadius: 13, padding: '9px 11px' }}>
               <img src={d.image} alt="" style={{ width: 46, height: 46, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
@@ -429,12 +429,12 @@ function AddModal({ v, primary }) {
             </div>
           ) : (
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1px dashed #d9cbb7', borderRadius: 13, padding: 12, color: '#a8794f', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
-              <Icons.Camera size={16} stroke={2} /> Add a photo <span style={{ color: '#c3b29a', fontWeight: 600 }}>· optional</span>
+              <DIcons.Camera size={16} stroke={2} /> Add a photo <span style={{ color: '#c3b29a', fontWeight: 600 }}>· optional</span>
               <input type="file" accept="image/*" onChange={v.a.onDraftPhoto} style={{ display: 'none' }} />
             </label>
           )}
           <button onClick={() => v.a.setDraft({ important: !d.important })} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 13, border: '1px solid ' + (d.important ? '#e7d3a3' : '#ece6db'), background: d.important ? '#fdf8ee' : '#fff', color: d.important ? '#a8822f' : '#7a7166', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
-            <Icons.Star size={18} filled={d.important} color={d.important ? undefined : '#b9ad97'} />
+            <DIcons.Star size={18} filled={d.important} color={d.important ? undefined : '#b9ad97'} />
             <span style={{ flex: 1, textAlign: 'left' }}>Mark as important</span>
           </button>
         </div>
@@ -462,7 +462,7 @@ function BulkModal({ v, primary }) {
             <span>Add to</span>
             <div style={{ position: 'relative' }}>
               <select value={v.s.bulkCat} onChange={(e) => v.a.set({ bulkCat: e.target.value })} style={{ ...selectStyle, width: 'auto', padding: '8px 30px 8px 11px', borderRadius: 10, fontSize: 13 }}>{v.catOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-              <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><Icons.Chevron size={13} /></span>
+              <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><DIcons.Chevron size={13} /></span>
             </div>
           </div>
           {lines.length > 0 && (
@@ -473,7 +473,7 @@ function BulkModal({ v, primary }) {
               </div>
               {lines.map((ln, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: '#fff', border: '1px solid #ece6db', borderRadius: 12 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#e7ede0', color: '#6f7d52', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icons.Check size={12} /></span>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#e7ede0', color: '#6f7d52', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><DIcons.Check size={12} /></span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 700, color: '#3a352f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ln}</span>
                 </div>
               ))}
@@ -509,7 +509,7 @@ function DetailModal({ v, primary, partner }) {
               ? <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 24, fontWeight: 700, margin: 0, color: '#3a352f', lineHeight: 1.15 }}>{idea.name}</h2>
               : <input value={e.name} onChange={(ev) => v.a.setEdit({ name: ev.target.value })} style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 13px', fontSize: 18, fontFamily: "'Quicksand',sans-serif", fontWeight: 700, color: '#3a352f', outline: 'none' }} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <button onClick={() => v.a.toggleImportant(idea.id)} title="Mark important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}><Icons.Star size={22} filled={idea.important} /></button>
+              <button onClick={() => v.a.toggleImportant(idea.id)} title="Mark important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}><DIcons.Star size={22} filled={idea.important} /></button>
               <button onClick={() => v.a.set({ detailId: null, editing: false })} style={closeX}>×</button>
             </div>
           </div>
@@ -522,14 +522,14 @@ function DetailModal({ v, primary, partner }) {
             <Fragment>
               <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Row label="Category"><span style={{ ...chipBase, background: idea.tone.bg, color: idea.tone.fg }}>{idea.catName}</span></Row>
-                <Row label="Added by"><span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 700, color: '#3a352f' }}><Avatar color={idea.byColor} initial={idea.byInitial} size={22} />{idea.byName}</span></Row>
+                <Row label="Added by"><span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 700, color: '#3a352f' }}><DAvatar color={idea.byColor} initial={idea.byInitial} size={22} />{idea.byName}</span></Row>
                 <Row label="Created"><span style={{ fontSize: 14, fontWeight: 700, color: '#3a352f' }}>{idea.date}</span></Row>
                 <Row label="Status" last><StatusPill idea={idea} /></Row>
               </div>
               {(idea.mapsUrl || idea.siteUrl) && (
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  {idea.mapsUrl && <LinkRow icon={<Icons.Pin size={16} />} label="Open in Maps" url={idea.mapsUrl} />}
-                  {idea.siteUrl && <LinkRow icon={<Icons.Globe size={16} />} label="Visit site" url={idea.siteUrl} />}
+                  {idea.mapsUrl && <LinkRow icon={<DIcons.Pin size={16} />} label="Open in Maps" url={idea.mapsUrl} />}
+                  {idea.siteUrl && <LinkRow icon={<DIcons.Globe size={16} />} label="Visit site" url={idea.siteUrl} />}
                 </div>
               )}
             </Fragment>
@@ -538,10 +538,10 @@ function DetailModal({ v, primary, partner }) {
             <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ position: 'relative' }}>
                 <select value={e.catId} onChange={(ev) => v.a.setEdit({ catId: ev.target.value })} style={selectStyle}>{v.catOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-                <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><Icons.Chevron size={15} /></span>
+                <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><DIcons.Chevron size={15} /></span>
               </div>
-              <FieldWithIcon icon={<Icons.Pin size={16} />} value={e.mapsUrl} onChange={(ev) => v.a.setEdit({ mapsUrl: ev.target.value })} placeholder="Google Maps link · optional" />
-              <FieldWithIcon icon={<Icons.Globe size={16} />} value={e.siteUrl} onChange={(ev) => v.a.setEdit({ siteUrl: ev.target.value })} placeholder="Website link · optional" />
+              <FieldWithIcon icon={<DIcons.Pin size={16} />} value={e.mapsUrl} onChange={(ev) => v.a.setEdit({ mapsUrl: ev.target.value })} placeholder="Google Maps link · optional" />
+              <FieldWithIcon icon={<DIcons.Globe size={16} />} value={e.siteUrl} onChange={(ev) => v.a.setEdit({ siteUrl: ev.target.value })} placeholder="Website link · optional" />
             </div>
           )}
         </div>
@@ -549,7 +549,7 @@ function DetailModal({ v, primary, partner }) {
           {!editing && (
             <Fragment>
               <button onClick={() => v.a.openSchedule(idea.id)} style={{ background: partner, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <Icons.Calendar size={16} color="#fff" />{idea.scheduled ? 'Reschedule' : 'Schedule'}
+                <DIcons.Calendar size={16} color="#fff" />{idea.scheduled ? 'Reschedule' : 'Schedule'}
               </button>
               {idea.scheduled && <button onClick={() => v.a.unschedule(idea.id)} style={{ background: '#f3ece1', color: '#a8794f', border: 'none', borderRadius: 13, padding: 12, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>Remove from calendar</button>}
             </Fragment>
@@ -569,7 +569,7 @@ function ScheduleModal({ v, primary, partner }) {
   const s = v.s, idea = v.allById[s.schedFor];
   const members = v.members || [];
   const timeField = { border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 12px', fontSize: 14, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', width: '100%' };
-  const InviteAvatar = ({ m }) => (<span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Avatar color={m.idx === 0 ? primary : partner} initial={(m.name[0] || '?').toUpperCase()} size={26} /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#3a352f' }}>{m.name}</span></span>);
+  const InviteAvatar = ({ m }) => (<span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><DAvatar color={m.idx === 0 ? primary : partner} initial={(m.name[0] || '?').toUpperCase()} size={26} /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#3a352f' }}>{m.name}</span></span>);
   return (
     <Overlay onClose={v.a.closeSchedule} z={1100}>
       <Sheet stop={v.stop} maxWidth={360}>
@@ -594,13 +594,13 @@ function ScheduleModal({ v, primary, partner }) {
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>Note <span style={{ color: '#c3b29a' }}>· optional</span></span><textarea value={s.schedNote} onChange={(e) => v.a.set({ schedNote: e.target.value })} placeholder="Anything to remember…" style={{ width: '100%', minHeight: 64, resize: 'vertical', border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '11px 13px', fontSize: 14, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.5 }} /></div>
           <p style={{ margin: 0, fontSize: 12.5, color: '#9a9186', fontWeight: 600, lineHeight: 1.5, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <span style={{ flexShrink: 0, marginTop: 1, display: 'flex' }}><Icons.Heart size={15} color={partner} /></span>
+            <span style={{ flexShrink: 0, marginTop: 1, display: 'flex' }}><DIcons.Heart size={15} color={partner} /></span>
             Saves the date and opens Google Calendar — prefilled with the place and your partner invited. Just tap Save.
           </p>
         </div>
         <div style={{ padding: '16px 22px 22px', display: 'flex', gap: 10 }}>
           <button onClick={v.a.closeSchedule} style={cancelBtn}>Cancel</button>
-          <button onClick={v.a.saveSchedule} style={{ flex: 2, background: partner, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icons.Calendar size={16} color="#fff" />Add to Google Calendar</button>
+          <button onClick={v.a.saveSchedule} style={{ flex: 2, background: partner, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><DIcons.Calendar size={16} color="#fff" />Add to Google Calendar</button>
         </div>
       </Sheet>
     </Overlay>
@@ -640,7 +640,7 @@ function BugModal({ v, primary }) {
           </div>
         ) : (
           <div style={{ padding: '38px 28px 30px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 62, height: 62, borderRadius: '50%', background: '#f6e0dc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icons.Heart size={28} color="#d08a86" fill="#d08a86" /></div>
+            <div style={{ width: 62, height: 62, borderRadius: '50%', background: '#f6e0dc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><DIcons.Heart size={28} color="#d08a86" fill="#d08a86" /></div>
             <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 25, fontWeight: 700, margin: 0, color: '#3a352f' }}>Thanks</h2>
             <p style={{ margin: 0, fontSize: 14.5, color: '#9a9186', fontWeight: 600, lineHeight: 1.55, maxWidth: 260 }}>Your report has been sent. We'll take a look as soon as possible.</p>
             <button onClick={() => v.a.set({ bugOpen: false, bugSent: false, bugText: '', bugEmail: '' })} style={{ marginTop: 6, width: '100%', background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
@@ -747,7 +747,7 @@ function buildView(state, actions, opts) {
 function Brand({ titleSize, subSize, dot, primary, partner }) {
   return (
     <a href="../" title="Back to Together" style={{ display: 'flex', flexDirection: 'column', gap: 5, textDecoration: 'none', color: 'inherit' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}><Icons.Logo size={dot} primary={primary} partner={partner} /></div>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}><DIcons.Logo size={dot} primary={primary} partner={partner} /></div>
       <h1 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: titleSize, fontWeight: 700, margin: 0, color: '#3a352f', letterSpacing: '.3px' }}>Together</h1>
       <p style={{ margin: 0, fontSize: subSize, color: '#9a9186', fontWeight: 600 }}>Date ideas, trips &amp; activities for us</p>
     </a>
@@ -763,7 +763,7 @@ function FilterGroup({ label, kind, v, open, onToggle, summary }) {
         <span style={upper}>{label}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: '#bcb3a6' }}>
           {!open && summary && <span style={{ fontSize: 12, fontWeight: 800, color: '#857c70', background: '#fff', border: '1px solid #ece6db', padding: '3px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>{summary}</span>}
-          <Icons.Chevron size={16} open={open} />
+          <DIcons.Chevron size={16} open={open} />
         </span>
       </button>
       {open && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 9 }}>{kind === 'cats' ? <CategoryFilters v={v} /> : <StatusFilters v={v} />}</div>}
@@ -788,16 +788,16 @@ function Board({ v, isDesktop, primary, partner }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
           <Brand titleSize={34} subSize={15} dot={20} primary={primary} partner={partner} />
           <div style={{ display: 'flex', gap: 11 }}>
-            <button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><Icons.Plus size={17} />Add Idea</button>
-            <button onClick={() => v.a.set({ bulkOpen: true, bulkText: '' })} style={bulkBtn}><Icons.Plus size={17} />Quick Add</button>
+            <button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><DIcons.Plus size={17} />Add Idea</button>
+            <button onClick={() => v.a.set({ bulkOpen: true, bulkText: '' })} style={bulkBtn}><DIcons.Plus size={17} />Quick Add</button>
           </div>
         </div>
       ) : (
         <Fragment>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} primary={primary} partner={partner} /></div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><Icons.Plus size={16} />Add Idea</button>
-            <button onClick={() => v.a.set({ bulkOpen: true, bulkText: '' })} style={bulkBtn}><Icons.Plus size={16} />Quick Add</button>
+            <button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><DIcons.Plus size={16} />Add Idea</button>
+            <button onClick={() => v.a.set({ bulkOpen: true, bulkText: '' })} style={bulkBtn}><DIcons.Plus size={16} />Quick Add</button>
           </div>
         </Fragment>
       )}
@@ -821,7 +821,7 @@ function Board({ v, isDesktop, primary, partner }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ position: 'relative' }}>
                 <select value={v.sortMode} onChange={v.setSortMode} style={{ background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 22px 5px 9px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>{v.sortOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-                <span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><Icons.Chevron size={12} /></span>
+                <span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><DIcons.Chevron size={12} /></span>
               </div>
               <span style={{ fontSize: 12, fontWeight: 800, color: '#b07d42', background: '#f6ebdc', padding: '4px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>{v.planLabel}</span>
             </div>
@@ -874,7 +874,7 @@ function BoardShell({ sx }) {
 
       <button onClick={() => actions.set({ bugOpen: true, bugSent: false })} title="Report a problem"
         style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
-        <Icons.Bug size={21} />
+        <DIcons.Bug size={21} />
       </button>
 
       <AddModal v={v} primary={primary} />
