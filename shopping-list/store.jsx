@@ -1,16 +1,31 @@
 // store.jsx — all Together state + actions as a hook (window.useTogetherStore).
 // This is the React port of the source DCLogic class methods.
 
+// Persist the durable slice of state to localStorage so the list survives
+// refreshes and revisits on the same device (transient UI like open modals and
+// drafts is intentionally not saved).
+const STORAGE_KEY = 'together.shopping-list.v1';
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.items) || !Array.isArray(data.labels)) return null;
+    return data;
+  } catch (e) { return null; }
+}
+
 function useTogetherStore() {
   const D = window.TogetherData;
+  const saved = loadSaved();
 
   const [state, setState] = React.useState(() => ({
-    labels: D.INITIAL_LABELS,
-    items: D.INITIAL_ITEMS,
+    labels: saved ? saved.labels : D.INITIAL_LABELS,
+    items: saved ? saved.items : D.INITIAL_ITEMS,
     activeFilter: 'all',
     statusFilter: 'all',
-    sortMode: 'smart',
-    currentUser: 'Dunkin',
+    sortMode: (saved && saved.sortMode) || 'smart',
+    currentUser: (saved && saved.currentUser) || 'Dunkin',
 
     // add-item draft
     draftName: '', draftQty: 1, draftUnit: 'pcs', draftLabel: 'ing',
@@ -36,6 +51,16 @@ function useTogetherStore() {
   const patch = React.useCallback((p) => {
     setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   }, []);
+
+  // Save whenever the durable slice changes.
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        labels: state.labels, items: state.items,
+        sortMode: state.sortMode, currentUser: state.currentUser,
+      }));
+    } catch (e) { /* storage full / disabled — list still works for the session */ }
+  }, [state.labels, state.items, state.sortMode, state.currentUser]);
 
   const readPhoto = (file, cb) => {
     if (!file) return;

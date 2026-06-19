@@ -73,6 +73,7 @@ function buildTogetherView(state, actions, opts) {
       checkMarkStyle: { fontSize: '14px', fontWeight: 900, color: '#fff', lineHeight: 1, opacity: done ? 1 : 0 },
       toggle: (e) => { e.stopPropagation(); actions.toggle(it.id); },
       remove: (e) => { e.stopPropagation(); actions.remove(it.id); },
+      deleteSelf: () => actions.remove(it.id),
       starToggle: (e) => { e.stopPropagation(); actions.toggleImportant(it.id); },
       open: () => actions.set({ detailId: it.id, editing: false }),
       openImg: (e) => { e.stopPropagation(); actions.set({ imageId: it.id }); },

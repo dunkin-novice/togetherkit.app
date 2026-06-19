@@ -53,6 +53,13 @@ const Icons = {
     </Svg>
   ),
 
+  Trash: ({ size = 17, stroke = 2 }) => (
+    <Svg size={size} stroke={stroke}>
+      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </Svg>
+  ),
+
   // Brand mark — the two overlapping dots (primary + partner).
   Logo: ({ size = 18 }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>

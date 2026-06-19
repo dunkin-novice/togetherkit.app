@@ -50,7 +50,7 @@ function useIsDesktop(breakpoint = 720) {
 function App() {
   const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
   const { TweaksPanel, TweakSection, TweakColor, TweakToggle } = window;
-  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, uppercaseLabel } = window.TogetherUI;
+  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, SwipeRow, uppercaseLabel } = window.TogetherUI;
   const { AddModal, BulkModal, DetailModal, ImageModal, BugModal } = window.TogetherModals;
 
   const primary = tweaks.primaryColor || '#c98a5c';
@@ -122,7 +122,11 @@ function App() {
                 ))}
                 <span />
               </div>
-              {v.items.map(item => <ItemRow key={item.id} item={item} showDate={showDate} />)}
+              {v.items.map(item => (
+                <SwipeRow key={item.id} radius={0} frontBg={item.important ? '#fdf8ee' : '#fff'} onDelete={item.deleteSelf}>
+                  <ItemRow item={item} showDate={showDate} />
+                </SwipeRow>
+              ))}
               {v.isEmpty && <EmptyState text={v.emptyText} pad="44px 20px" />}
             </div>
           ) : (
@@ -137,7 +141,11 @@ function App() {
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {v.items.map(item => <ItemCard key={item.id} item={item} showDate={showDate} />)}
+                {v.items.map(item => (
+                  <SwipeRow key={item.id} radius={18} onDelete={item.deleteSelf}>
+                    <ItemCard item={item} showDate={showDate} />
+                  </SwipeRow>
+                ))}
                 {v.isEmpty && <EmptyState text={v.emptyText} pad="34px 20px" />}
               </div>
             </React.Fragment>
