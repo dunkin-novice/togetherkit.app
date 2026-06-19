@@ -58,13 +58,6 @@ function AddModal({ v }) {
               <input type="file" accept="image/*" onChange={v.onDraftPhoto} style={{ display: 'none' }} />
             </label>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={upper}>Created by</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={v.setUserA} style={v.creatorAStyle}>{v.userAName}</button>
-              <button onClick={v.setUserB} style={v.creatorBStyle}>{v.userBName}</button>
-            </div>
-          </div>
           <button onClick={v.toggleDraftImportant} style={v.draftImportantRowStyle}>
             <MIcons.Star size={18} filled={v.draftImportant} color={v.draftImportant ? undefined : '#b9ad97'} />
             <span style={{ flex: 1, textAlign: 'left' }}>Mark as important</span>
@@ -113,9 +106,6 @@ function BulkModal({ v }) {
             <select value={v.bulkLabelId} onChange={v.setBulkLabel} style={{ ...selectStyle, padding: '8px 11px', borderRadius: 10, fontSize: 13 }}>
               {v.labelOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
-            <span>as</span>
-            <button onClick={v.setUserA} style={v.creatorAStyleSm}>{v.userAName}</button>
-            <button onClick={v.setUserB} style={v.creatorBStyleSm}>{v.userBName}</button>
           </div>
           {v.hasBulkRows && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

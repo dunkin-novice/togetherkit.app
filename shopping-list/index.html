@@ -42,10 +42,12 @@
 <script type="text/babel" src="icons.jsx"></script>
 <script type="text/babel" src="data.jsx"></script>
 <script type="text/babel" src="supabase.jsx"></script>
+<script type="text/babel" src="session.jsx"></script>
 <script type="text/babel" src="store.jsx"></script>
 <script type="text/babel" src="view.jsx"></script>
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="modals.jsx"></script>
+<script type="text/babel" src="account.jsx"></script>
 
 <script type="text/babel">
 // Together — shared shopping list. A single responsive screen: below 720px it
@@ -70,11 +72,23 @@ function useIsDesktop(breakpoint = 720) {
   return isDesktop;
 }
 
+// Auth gate: resolve session → sign-in screen → set up homespace → the board.
 function App() {
+  const sx = window.useTogetherSession();
+  const { SignIn, Splash } = window.TogetherAccount;
+  if (!sx.ready) return <Splash text="…" />;
+  if (!sx.session) return <SignIn onGoogle={sx.actions.signInGoogle} />;
+  if (!sx.homespaceId) return <Splash text={sx.error ? ('Something went wrong: ' + sx.error) : 'Setting up your space…'} />;
+  return <Board sx={sx} />;
+}
+
+function Board({ sx }) {
   const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
   const { TweaksPanel, TweakSection, TweakColor, TweakToggle } = window;
-  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, SwipeRow, ShareButton, uppercaseLabel } = window.TogetherUI;
+  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, SwipeRow, uppercaseLabel } = window.TogetherUI;
   const { AddModal, BulkModal, DetailModal, ImageModal, BugModal } = window.TogetherModals;
+  const { AccountButton, AccountSheet } = window.TogetherAccount;
+  const [accountOpen, setAccountOpen] = React.useState(false);
 
   const primary = tweaks.primaryColor || '#c98a5c';
   const partner = tweaks.partnerColor || '#8a9b6e';
@@ -87,8 +101,8 @@ function App() {
     document.documentElement.style.setProperty('--partner', partner);
   }, [primary, partner]);
 
-  const [state, actions] = window.useTogetherStore();
-  const v = window.buildTogetherView(state, actions, { primary, partner, showDate });
+  const [state, actions] = window.useTogetherStore(sx.homespaceId, sx.me);
+  const v = window.buildTogetherView(state, actions, { primary, partner, showDate, members: sx.members, me: sx.me });
 
   const FilterGroup = ({ label }) => (
     <div style={isDesktop
@@ -182,8 +196,9 @@ function App() {
         {v.unitSuggestions.map(u => <option key={u} value={u} />)}
       </datalist>
 
-      {/* fixed share button (top-left, mirrors the bug button) */}
-      <ShareButton />
+      {/* fixed account button (top-left) — names, members, invite, sign out */}
+      <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
+      {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
 
       {/* fixed bug-report button */}
       <button onClick={v.openBug} title="Report a problem"

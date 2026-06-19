@@ -4,15 +4,23 @@
 // and the inline style objects that give Together its look.
 
 function buildTogetherView(state, actions, opts) {
-  const { primary, partner, showDate } = opts;
+  const { primary, partner, showDate, members = [], me = null } = opts;
+
+  // Resolve who added an item to a name + avatar colour. Colour follows the
+  // member's slot in the homespace (first = primary, second = partner).
+  const memberByUid = {};
+  members.forEach(m => { memberByUid[m.uid] = m; });
+  const slotColor = (idx) => idx === 0 ? primary : idx === 1 ? partner : '#9a9186';
+  const resolveBy = (byUser, byName) => {
+    const m = byUser && memberByUid[byUser];
+    if (m) return { name: m.name, color: slotColor(m.idx) };
+    return { name: byName || 'Someone', color: '#9a9186' };
+  };
   const D = window.TogetherData;
   const { TONES, toneOf } = D;
 
   const labelById = {};
   state.labels.forEach(l => { labelById[l.id] = l; });
-
-  const USERS = { Dunkin: { name: 'Dunkin', color: primary }, Pare: { name: 'Pare', color: partner } };
-  const userKeys = Object.keys(USERS);
 
   const avBase = { borderRadius: '50%', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
   const baseChip = { padding: '3px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-block' };
@@ -45,7 +53,7 @@ function buildTogetherView(state, actions, opts) {
   const visible = indexed.map(x => x.it);
 
   const items = visible.map(it => {
-    const u = USERS[it.by] || { name: it.by, color: '#9a9186' };
+    const u = resolveBy(it.byUser, it.byName);
     const done = it.done;
     const important = it.important;
     const label = labelById[it.labelId];
@@ -134,14 +142,11 @@ function buildTogetherView(state, actions, opts) {
   let listHeading = af === 'all' ? 'Your list' : activeName;
   if (sf !== 'all') listHeading = (af === 'all' ? sfName : (activeName + ' · ' + sfName));
 
-  const aActive = state.currentUser === userKeys[0];
-  const bActive = state.currentUser === userKeys[1];
-
   // detail
   const detail = state.items.find(i => i.id === state.detailId) || null;
   let detailVals = {};
   if (detail) {
-    const u = USERS[detail.by] || { name: detail.by, color: '#9a9186' };
+    const u = resolveBy(detail.byUser, detail.byName);
     const label = labelById[detail.labelId];
     const t = toneOf(label);
     detailVals = {
@@ -233,14 +238,6 @@ function buildTogetherView(state, actions, opts) {
     addItemBtnDeskStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', background: primary, color: '#fff', border: 'none', borderRadius: '14px', padding: '12px 22px', fontWeight: 800, fontSize: '14.5px', cursor: 'pointer', fontFamily: 'inherit' },
     bulkBtnDeskStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', background: '#fff', color: '#a8794f', border: '1px solid #ecd9c4', borderRadius: '14px', padding: '12px 22px', fontWeight: 800, fontSize: '14.5px', cursor: 'pointer', fontFamily: 'inherit' },
 
-    userAName: userKeys[0],
-    userBName: userKeys[1],
-    setUserA: () => actions.set({ currentUser: userKeys[0] }),
-    setUserB: () => actions.set({ currentUser: userKeys[1] }),
-    creatorAStyle: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', padding: '11px', borderRadius: '12px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', border: 'none', background: aActive ? primary : '#f5f0e8', color: aActive ? '#fff' : '#9a9186' },
-    creatorBStyle: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', padding: '11px', borderRadius: '12px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', border: 'none', background: bActive ? partner : '#f5f0e8', color: bActive ? '#fff' : '#9a9186' },
-    creatorAStyleSm: { padding: '6px 13px', borderRadius: '999px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', border: 'none', background: aActive ? primary : '#f5f0e8', color: aActive ? '#fff' : '#9a9186' },
-    creatorBStyleSm: { padding: '6px 13px', borderRadius: '999px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', border: 'none', background: bActive ? partner : '#f5f0e8', color: bActive ? '#fff' : '#9a9186' },
 
     // add modal
     addOpen: state.addOpen,

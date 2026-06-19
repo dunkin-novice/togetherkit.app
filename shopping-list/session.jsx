@@ -1,0 +1,129 @@
+// session.jsx — auth + homespace bootstrap (window.useTogetherSession).
+//
+// Resolves the Supabase session, ensures the user has a profile and a homespace
+// (redeeming an ?invite=token link if present, else their own), and loads the
+// homespace + its members for display. Returns everything the app needs to gate
+// on auth and scope data to the shared space.
+
+const HS_KEY = 'togetherkit.hs';
+
+function useTogetherSession() {
+  const BE = window.TogetherBackend;
+  const { client } = BE;
+
+  const [ready, setReady] = React.useState(false);   // auth state resolved
+  const [session, setSession] = React.useState(null);
+  const [booting, setBooting] = React.useState(false);
+  const [homespaceId, setHomespaceId] = React.useState(null);
+  const [homespace, setHomespace] = React.useState(null);
+  const [members, setMembers] = React.useState([]);
+  const [profile, setProfile] = React.useState(null);
+  const [error, setError] = React.useState(null);
+
+  // track auth
+  React.useEffect(() => {
+    client.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
+    const { data } = client.auth.onAuthStateChange((_e, s) => { setSession(s); setReady(true); });
+    return () => data.subscription && data.subscription.unsubscribe();
+  }, [client]);
+
+  // bootstrap profile + homespace when signed in
+  React.useEffect(() => {
+    if (!session) { setHomespaceId(null); setHomespace(null); setMembers([]); setProfile(null); return; }
+    let alive = true;
+    (async () => {
+      setBooting(true); setError(null);
+      try {
+        const u = session.user;
+        const md = u.user_metadata || {};
+        const fallbackName = md.name || md.full_name || (u.email ? u.email.split('@')[0] : 'Me');
+        const avatar = md.avatar_url || md.picture || null;
+
+        // create profile on first sign-in; never clobber a name the user edited
+        const existing = await client.from('profiles').select('display_name').eq('id', u.id).maybeSingle();
+        if (!existing.data) await client.from('profiles').insert({ id: u.id, display_name: fallbackName, avatar_url: avatar });
+        else if (!existing.data.display_name) await client.from('profiles').update({ display_name: fallbackName, avatar_url: avatar }).eq('id', u.id);
+
+        // homespace: invite link wins, then remembered, then own
+        const params = new URLSearchParams(location.search);
+        const invite = params.get('invite');
+        let hs = null;
+        if (invite) {
+          const { data } = await client.rpc('redeem_invite', { p_token: invite });
+          hs = data;
+          params.delete('invite');
+          const q = params.toString();
+          history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+        }
+        if (!hs) { try { hs = localStorage.getItem(HS_KEY); } catch (e) {} }
+        if (hs) { // make sure we're actually a member of the remembered space
+          const chk = await client.from('members').select('homespace_id').eq('homespace_id', hs).maybeSingle();
+          if (!chk.data) hs = null;
+        }
+        if (!hs) { const { data } = await client.rpc('ensure_home'); hs = data; }
+        if (!alive) return;
+        try { localStorage.setItem(HS_KEY, hs); } catch (e) {}
+        setHomespaceId(hs);
+      } catch (e) {
+        if (alive) setError(e.message || String(e));
+      } finally {
+        if (alive) setBooting(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [session, client]);
+
+  // load homespace + members (+ keep live)
+  React.useEffect(() => {
+    if (!homespaceId || !session) return;
+    let alive = true;
+    const load = async () => {
+      const hsRow = await client.from('homespaces').select('id,name').eq('id', homespaceId).maybeSingle();
+      const mem = await client.from('members').select('user_id,role,created_at').eq('homespace_id', homespaceId).order('created_at', { ascending: true });
+      const ids = (mem.data || []).map(m => m.user_id);
+      const profs = {};
+      if (ids.length) {
+        const pr = await client.from('profiles').select('id,display_name,avatar_url').in('id', ids);
+        (pr.data || []).forEach(p => { profs[p.id] = p; });
+      }
+      if (!alive) return;
+      const list = (mem.data || []).map((m, i) => ({
+        uid: m.user_id, role: m.role, idx: i,
+        name: (profs[m.user_id] && profs[m.user_id].display_name) || 'Member',
+        avatar: (profs[m.user_id] && profs[m.user_id].avatar_url) || null,
+      }));
+      setHomespace(hsRow.data || { id: homespaceId, name: 'Our space' });
+      setMembers(list);
+      setProfile(profs[session.user.id] || null);
+    };
+    load();
+    const ch = client.channel('hs:' + homespaceId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members', filter: 'homespace_id=eq.' + homespaceId }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'homespaces', filter: 'id=eq.' + homespaceId }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, load)
+      .subscribe();
+    return () => { alive = false; client.removeChannel(ch); };
+  }, [homespaceId, session, client]);
+
+  const actions = React.useMemo(() => ({
+    signInGoogle: () => BE.auth.signInGoogle(),
+    signOut: async () => { try { localStorage.removeItem(HS_KEY); } catch (e) {} await BE.auth.signOut(); },
+    setMyName: (name) => client.from('profiles').update({ display_name: name }).eq('id', session.user.id),
+    setSpaceName: (name) => client.from('homespaces').update({ name }).eq('id', homespaceId),
+    createInvite: async () => {
+      const token = 'inv-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      const r = await client.from('invites').insert({ token, homespace_id: homespaceId, created_by: session.user.id });
+      if (r.error) throw r.error;
+      return location.origin + location.pathname + '?invite=' + token;
+    },
+  }), [BE, client, session, homespaceId]);
+
+  const myName = (profile && profile.display_name)
+    || (session && (members.find(m => m.uid === session.user.id) || {}).name)
+    || 'Me';
+  const me = session ? { uid: session.user.id, name: myName } : null;
+
+  return { ready, booting, error, session, user: session && session.user, me, homespaceId, homespace, members, actions };
+}
+
+window.useTogetherSession = useTogetherSession;
