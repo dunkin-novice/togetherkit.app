@@ -39,14 +39,20 @@ function nextSaturday() {
   d.setDate(d.getDate() + add);
   return d.toISOString().slice(0, 10);
 }
-// Prefilled Google Calendar "create event" link (no API/OAuth needed).
-function gcalUrl(name, dateStr, startStr, endStr, note) {
+// Prefilled Google Calendar "create event" link (no API/OAuth/billing needed).
+// Pre-fills date/time, location, details, and guests (the partner) so the user
+// just taps Save and the invite goes out.
+function gcalUrl(name, dateStr, startStr, endStr, opts) {
   if (!dateStr) return '';
+  opts = opts || {};
   const start = new Date(dateStr + 'T' + (startStr || '19:00'));
   const end = (endStr ? new Date(dateStr + 'T' + endStr) : new Date(start.getTime() + 2 * 3600 * 1000));
   const stamp = (d) => '' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + pad2(d.getMinutes()) + '00';
   const p = new URLSearchParams({ action: 'TEMPLATE', text: name || 'Together date', dates: stamp(start) + '/' + stamp(end) });
-  if (note) p.set('details', note);
+  const details = [opts.note, opts.mapsUrl && ('Maps: ' + opts.mapsUrl), opts.siteUrl && ('Link: ' + opts.siteUrl)].filter(Boolean).join('\n');
+  if (details) p.set('details', details);
+  if (opts.location) p.set('location', opts.location);
+  if (opts.guests && opts.guests.length) p.set('add', opts.guests.join(','));
   return 'https://calendar.google.com/calendar/render?' + p.toString();
 }
 
@@ -94,7 +100,7 @@ const rowToCat = (r) => ({ id: r.id, name: r.name, tone: r.tone, custom: !!r.cus
 const catToRow = (c, hs, sort) => ({ homespace_id: hs, id: c.id, name: c.name, tone: c.tone, custom: !!c.custom, sort: sort != null ? sort : (c.sort || 0) });
 
 /* ── Supabase-backed, homespace-scoped store ──────────────────────────────── */
-function useIdeasStore(homespaceId, me) {
+function useIdeasStore(homespaceId, me, members) {
   const BE = window.TogetherBackend;
   const { client } = BE;
   const [state, setState] = useState(() => ({
@@ -111,6 +117,7 @@ function useIdeasStore(homespaceId, me) {
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   const ref = useRef(state); ref.current = state;
   const meRef = useRef(me); meRef.current = me;
+  const membersRef = useRef(members); membersRef.current = members;
   const readPhoto = (file, cb) => { if (!file) return; const r = new FileReader(); r.onload = () => cb(r.result); r.readAsDataURL(file); };
   const db = (p) => { Promise.resolve(p).then(r => { if (r && r.error) console.warn('[togetherkit/ideas] sync', r.error.message); }, e => console.warn('[togetherkit/ideas] sync', e)); };
 
@@ -185,8 +192,16 @@ function useIdeasStore(homespaceId, me) {
       const idea = ref.current.ideas.find(i => i.id === id);
       patch(st => ({ schedFor: null, ideas: st.ideas.map(it => it.id === id ? { ...it, scheduled: true, schedText: text, schedNote: s.schedNote } : it) }));
       db(client.from('ideas').update({ scheduled: true, sched_text: text, sched_at: at, sched_note: s.schedNote || null, updated_at: new Date().toISOString() }).eq('id', id));
-      // also open a prefilled Google Calendar event the user can confirm
-      try { const url = gcalUrl(idea && idea.name, s.schedDate, s.schedStart, s.schedEnd, s.schedNote); if (url) window.open(url, '_blank', 'noopener'); } catch (e) {}
+      // open a prefilled Google Calendar event: date/time, location, notes, and
+      // (if "invite both" is on) the partner pre-added as a guest. One tap to save.
+      try {
+        const mem = membersRef.current || [], my = meRef.current;
+        const guests = s.schedInvite ? mem.filter(m => m.email && (!my || m.uid !== my.uid)).map(m => m.email) : [];
+        const url = gcalUrl(idea && idea.name, s.schedDate, s.schedStart, s.schedEnd, {
+          note: s.schedNote, location: idea && idea.name, mapsUrl: idea && idea.mapsUrl, siteUrl: idea && idea.siteUrl, guests,
+        });
+        if (url) window.open(url, '_blank', 'noopener');
+      } catch (e) {}
     },
     unschedule: (id) => { patch(s => ({ ideas: s.ideas.map(it => it.id === id ? { ...it, scheduled: false, schedText: '' } : it) })); db(client.from('ideas').update({ scheduled: false, sched_text: null, sched_at: null }).eq('id', id)); },
 
@@ -554,7 +569,7 @@ function ScheduleModal({ v, primary, partner }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>Note <span style={{ color: '#c3b29a' }}>· optional</span></span><textarea value={s.schedNote} onChange={(e) => v.a.set({ schedNote: e.target.value })} placeholder="Anything to remember…" style={{ width: '100%', minHeight: 64, resize: 'vertical', border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '11px 13px', fontSize: 14, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.5 }} /></div>
           <p style={{ margin: 0, fontSize: 12.5, color: '#9a9186', fontWeight: 600, lineHeight: 1.5, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <span style={{ flexShrink: 0, marginTop: 1, display: 'flex' }}><Icons.Heart size={15} color={partner} /></span>
-            Saves the date and opens Google Calendar with the event ready to add.
+            Saves the date and opens Google Calendar — prefilled with the place and your partner invited. Just tap Save.
           </p>
         </div>
         <div style={{ padding: '16px 22px 22px', display: 'flex', gap: 10 }}>
@@ -820,7 +835,7 @@ function BoardShell({ sx }) {
   const partner = tweaks.partnerColor || '#8a9b6e';
   const isDesktop = useIsDesktop();
   useEffect(() => { document.documentElement.style.setProperty('--primary', primary); document.documentElement.style.setProperty('--partner', partner); }, [primary, partner]);
-  const [state, actions] = useIdeasStore(sx.homespaceId, sx.me);
+  const [state, actions] = useIdeasStore(sx.homespaceId, sx.me, sx.members);
   const v = buildView(state, actions, { primary, partner, members: sx.members, me: sx.me });
   return (
     <div className="app">

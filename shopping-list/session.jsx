@@ -39,10 +39,16 @@ function useTogetherSession() {
         const fallbackName = md.name || md.full_name || (u.email ? u.email.split('@')[0] : 'Me');
         const avatar = md.avatar_url || md.picture || null;
 
-        // create profile on first sign-in; never clobber a name the user edited
-        const existing = await client.from('profiles').select('display_name').eq('id', u.id).maybeSingle();
-        if (!existing.data) await client.from('profiles').insert({ id: u.id, display_name: fallbackName, avatar_url: avatar });
-        else if (!existing.data.display_name) await client.from('profiles').update({ display_name: fallbackName, avatar_url: avatar }).eq('id', u.id);
+        // create profile on first sign-in; never clobber a name the user edited.
+        // Email is captured/backfilled so the partner can be invited to calendar events.
+        const existing = await client.from('profiles').select('display_name,email').eq('id', u.id).maybeSingle();
+        if (!existing.data) await client.from('profiles').insert({ id: u.id, display_name: fallbackName, avatar_url: avatar, email: u.email });
+        else {
+          const upd = {};
+          if (!existing.data.display_name) { upd.display_name = fallbackName; upd.avatar_url = avatar; }
+          if (!existing.data.email && u.email) upd.email = u.email;
+          if (Object.keys(upd).length) await client.from('profiles').update(upd).eq('id', u.id);
+        }
 
         // homespace: invite link wins, then remembered, then own. The invite may
         // arrive in the URL or, after a Google round-trip, from local storage.
@@ -87,7 +93,7 @@ function useTogetherSession() {
       const ids = (mem.data || []).map(m => m.user_id);
       const profs = {};
       if (ids.length) {
-        const pr = await client.from('profiles').select('id,display_name,avatar_url').in('id', ids);
+        const pr = await client.from('profiles').select('id,display_name,avatar_url,email').in('id', ids);
         (pr.data || []).forEach(p => { profs[p.id] = p; });
       }
       if (!alive) return;
@@ -95,6 +101,7 @@ function useTogetherSession() {
         uid: m.user_id, role: m.role, idx: i,
         name: (profs[m.user_id] && profs[m.user_id].display_name) || 'Member',
         avatar: (profs[m.user_id] && profs[m.user_id].avatar_url) || null,
+        email: (profs[m.user_id] && profs[m.user_id].email) || null,
       }));
       setHomespace(hsRow.data || { id: homespaceId, name: 'Our space' });
       setMembers(list);
