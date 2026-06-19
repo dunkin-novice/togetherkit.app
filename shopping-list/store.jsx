@@ -58,7 +58,9 @@ function useTogetherStore(homespaceId, me) {
       ]);
       if (!alive) return;
       let labels = (lr.data || []).map(BE.rowToLabel);
-      if (labels.length === 0 && !lr.error) {
+      // Seed starter labels only for a brand-new space (no labels AND no items),
+      // so labels a user deleted (including the defaults) don't come back.
+      if (labels.length === 0 && !lr.error && (ir.data || []).length === 0) {
         const seed = D.INITIAL_LABELS.map((l, i) => BE.labelToRow(l, homespaceId, i));
         await client.from('labels').upsert(seed, { onConflict: 'homespace_id,id', ignoreDuplicates: true });
         labels = D.INITIAL_LABELS.map(l => ({ id: l.id, name: l.name, tone: l.tone, custom: l.custom, sort: 0 }));

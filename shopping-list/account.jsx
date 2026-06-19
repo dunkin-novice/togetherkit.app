@@ -5,7 +5,15 @@
 
 const memberColorByIndex = (idx) => idx === 0 ? 'var(--primary)' : idx === 1 ? 'var(--partner)' : '#b3a99c';
 
-function Avatar({ name, idx, size = 26 }) {
+function Avatar({ name, idx, size = 26, src }) {
+  // Show the Google profile photo when we have one; fall back to a colored
+  // initial. `referrerPolicy` is required or Google may refuse to serve the image.
+  if (src) {
+    return (
+      <img src={src} alt={name || ''} referrerPolicy="no-referrer"
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, display: 'block', background: memberColorByIndex(idx) }} />
+    );
+  }
   return (
     <span style={{ width: size, height: size, borderRadius: '50%', background: memberColorByIndex(idx), color: '#fff', fontWeight: 800, fontSize: Math.round(size * 0.42), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       {(name && name[0]) ? name[0].toUpperCase() : '?'}
@@ -40,7 +48,7 @@ function SignIn({ onGoogle }) {
         <div style={{ padding: '54px 30px 44px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}><window.Icons.Logo size={24} /></div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 700, margin: 0, color: '#3a352f', letterSpacing: '.3px' }}>Together</h1>
-          <p style={{ margin: '0 0 22px', fontSize: 15, color: '#9a9186', fontWeight: 600, maxWidth: 280, lineHeight: 1.45 }}>A shared shopping list for two. Sign in, then invite your soulmate to your homespace.</p>
+          <p style={{ margin: '0 0 22px', fontSize: 15, color: '#9a9186', fontWeight: 600, maxWidth: 280, lineHeight: 1.45 }}>A little app made for two in love. Sign in, then invite your soulmate to your homespace.</p>
           <button onClick={go} disabled={busy}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', maxWidth: 300, background: '#fff', color: '#3a352f', border: '1px solid #e6ded2', borderRadius: 14, padding: '14px', fontWeight: 800, fontSize: 15, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.05)' }}>
             <GoogleMark /> {busy ? 'Opening Google…' : 'Sign in with Google'}
@@ -75,7 +83,7 @@ function AccountButton({ sx, onOpen }) {
   return (
     <button onClick={onOpen} title="Account & invite"
       style={{ position: 'fixed', top: 24, left: 24, zIndex: 900, width: 46, height: 46, padding: 0, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
-      <Avatar name={sx.me ? sx.me.name : '?'} idx={meIdx} size={32} />
+      <Avatar name={sx.me ? sx.me.name : '?'} idx={meIdx} size={32} src={sx.me && sx.me.avatar} />
     </button>
   );
 }
@@ -89,9 +97,11 @@ function AccountSheet({ sx, onClose }) {
   const [inviteUrl, setInviteUrl] = React.useState('');
   const [copied, setCopied] = React.useState(false);
   const [making, setMaking] = React.useState(false);
+  const [nameSaved, setNameSaved] = React.useState(false);
   const stop = (e) => e.stopPropagation();
 
-  const saveName = () => { const n = name.trim(); if (n && n !== (sx.me && sx.me.name)) sx.actions.setMyName(n); };
+  const nameDirty = !!name.trim() && name.trim() !== (sx.me && sx.me.name);
+  const saveName = () => { if (!nameDirty) return; sx.actions.setMyName(name.trim()); setNameSaved(true); setTimeout(() => setNameSaved(false), 1800); };
   const saveSpace = () => { const n = space.trim(); if (n && n !== (sx.homespace && sx.homespace.name)) sx.actions.setSpaceName(n); };
 
   const invite = async () => {
@@ -115,7 +125,13 @@ function AccountSheet({ sx, onClose }) {
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px 4px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <span style={aUpper}>Your name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} style={aInput} placeholder="Your name" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={name} onChange={(e) => { setName(e.target.value); setNameSaved(false); }} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }} style={{ ...aInput, flex: 1 }} placeholder="Your name" />
+              <button onClick={saveName} disabled={!nameDirty && !nameSaved}
+                style={{ flexShrink: 0, background: nameSaved ? 'var(--partner)' : (nameDirty ? 'var(--primary)' : '#ece6db'), color: (nameDirty || nameSaved) ? '#fff' : '#b3a99c', border: 'none', borderRadius: 12, padding: '0 18px', fontWeight: 800, fontSize: 14, cursor: nameDirty ? 'pointer' : 'default', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                {nameSaved ? 'Saved ✓' : 'Save'}
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <span style={aUpper}>Space name</span>
@@ -125,7 +141,7 @@ function AccountSheet({ sx, onClose }) {
             <span style={aUpper}>Members</span>
             {sx.members.map(m => (
               <div key={m.uid} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Avatar name={m.name} idx={m.idx} size={28} />
+                <Avatar name={m.name} idx={m.idx} size={28} src={m.avatar} />
                 <span style={{ fontSize: 14.5, fontWeight: 700, color: '#3a352f' }}>{m.name}</span>
                 {sx.me && m.uid === sx.me.uid && <span style={{ fontSize: 11, fontWeight: 800, color: '#a8794f', background: '#f4e8dd', padding: '2px 8px', borderRadius: 999 }}>You</span>}
               </div>

@@ -132,7 +132,14 @@ function useTogetherSession() {
   const myName = (profile && profile.display_name)
     || (session && (members.find(m => m.uid === session.user.id) || {}).name)
     || 'Me';
-  const me = session ? { uid: session.user.id, name: myName } : null;
+  // Prefer the stored profile photo, then the member row, then the live Google
+  // metadata (covers the first render before profiles/members have loaded).
+  const myAvatar = (profile && profile.avatar_url)
+    || (session && (members.find(m => m.uid === session.user.id) || {}).avatar)
+    || (session && session.user && (session.user.user_metadata || {}).avatar_url)
+    || (session && session.user && (session.user.user_metadata || {}).picture)
+    || null;
+  const me = session ? { uid: session.user.id, name: myName, avatar: myAvatar } : null;
 
   return { ready, booting, error, session, user: session && session.user, me, homespaceId, homespace, members, actions };
 }

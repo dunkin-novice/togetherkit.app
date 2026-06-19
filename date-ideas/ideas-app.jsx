@@ -133,7 +133,10 @@ function useIdeasStore(homespaceId, me, members) {
       ]);
       if (!alive) return;
       let cats = (cr.data || []).map(rowToCat);
-      if (cats.length === 0 && !cr.error) {
+      // Seed the 3 starter categories only for a brand-new space (no categories
+      // AND no ideas). Otherwise a user who deleted the defaults would get them
+      // back on every reload.
+      if (cats.length === 0 && !cr.error && (ir.data || []).length === 0) {
         const seed = SEED_CATS.map((c, i) => catToRow(c, homespaceId, i));
         await client.from('idea_categories').upsert(seed, { onConflict: 'homespace_id,id', ignoreDuplicates: true });
         cats = SEED_CATS.map((c, i) => ({ ...c, sort: i }));
@@ -169,6 +172,18 @@ function useIdeasStore(homespaceId, me, members) {
       const cat = { id: 'c' + Date.now(), name, tone, custom: true, sort: s.categories.length };
       patch(st => ({ categories: [...st.categories, cat], newCatName: '' }));
       db(client.from('idea_categories').insert(catToRow(cat, homespaceId, cat.sort)));
+    },
+    // Create a custom type on the fly (e.g. from the Add Idea modal) and return
+    // its id so the caller can select it. Reuses an existing same-name category.
+    createCategory: (rawName) => {
+      const s = ref.current, name = (rawName || '').trim(); if (!name) return null;
+      const existing = s.categories.find(c => c.name.toLowerCase() === name.toLowerCase());
+      if (existing) return existing.id;
+      const tone = TONE_CYCLE[s.categories.length % TONE_CYCLE.length];
+      const cat = { id: 'c' + Date.now(), name, tone, custom: true, sort: s.categories.length };
+      patch(st => ({ categories: [...st.categories, cat] }));
+      db(client.from('idea_categories').insert(catToRow(cat, homespaceId, cat.sort)));
+      return cat.id;
     },
     renameCategory: (id, v) => { patch(s => ({ categories: s.categories.map(c => c.id === id ? { ...c, name: v } : c) })); db(client.from('idea_categories').update({ name: v }).eq('homespace_id', homespaceId).eq('id', id)); },
     deleteCategory: (id) => {
@@ -335,21 +350,17 @@ function CategoriesPanel({ v, partner, maxWidth }) {
         <button onClick={v.toggleCats} style={{ background: 'none', border: 'none', color: '#a8794f', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Done</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={upper}>Default</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{v.defaultChips.map((d, i) => <span key={i} style={d.style}>{d.name}</span>)}</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span style={upper}>Your categories</span>
-        {v.customCats.length ? (
+        {v.manageCats.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {v.customCats.map(cl => (
+            {v.manageCats.map(cl => (
               <div key={cl.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={cl.dotStyle} /><input value={cl.name} onChange={cl.rename} style={labelInput} />
-                <button onClick={cl.remove} style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
+                <button onClick={cl.remove} title="Delete category" style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
               </div>
             ))}
           </div>
-        ) : <span style={{ fontSize: 13, color: '#b3a99c', fontWeight: 600 }}>No custom categories yet — add one below.</span>}
+        ) : <span style={{ fontSize: 13, color: '#b3a99c', fontWeight: 600 }}>No categories yet — add one below.</span>}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: '1px solid #f0ebe2', paddingTop: 14 }}>
         <span style={v.newCatDot} />
@@ -378,8 +389,14 @@ function FieldWithIcon({ icon, ...rest }) {
 
 /* ── modals ───────────────────────────────────────────────────────────────── */
 function AddModal({ v, primary }) {
+  const [showNew, setShowNew] = useState(false);
+  const [newType, setNewType] = useState('');
   if (!v.s.addOpen) return null;
   const d = v.s.draft;
+  const createType = () => {
+    const id = v.a.createCategory(newType);
+    if (id) { v.a.setDraft({ catId: id }); setNewType(''); setShowNew(false); }
+  };
   return (
     <Overlay onClose={() => v.a.set({ addOpen: false })}>
       <Sheet stop={v.stop} maxWidth={360}>
@@ -390,9 +407,18 @@ function AddModal({ v, primary }) {
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input value={d.name} onChange={(e) => v.a.setDraft({ name: e.target.value })} placeholder="What should we do?" style={fieldInput} />
           <div style={{ position: 'relative' }}>
-            <select value={d.catId} onChange={(e) => v.a.setDraft({ catId: e.target.value })} style={selectStyle}>{v.catOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+            <select value={d.catId} onChange={(e) => { if (e.target.value === '__new__') { setShowNew(true); } else { setShowNew(false); v.a.setDraft({ catId: e.target.value }); } }} style={selectStyle}>
+              {v.catOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              <option value="__new__">+ New type…</option>
+            </select>
             <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><Icons.Chevron size={15} /></span>
           </div>
+          {showNew && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input autoFocus value={newType} onChange={(e) => setNewType(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') createType(); }} placeholder="Name your own type…" style={{ ...fieldInput, flex: 1 }} />
+              <button onClick={createType} disabled={!newType.trim()} style={{ flexShrink: 0, background: newType.trim() ? primary : '#d9cfc0', color: '#fff', border: 'none', borderRadius: 13, padding: '0 18px', fontWeight: 800, fontSize: 14, cursor: newType.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>Add</button>
+            </div>
+          )}
           <FieldWithIcon icon={<Icons.Pin size={16} />} value={d.mapsUrl} onChange={(e) => v.a.setDraft({ mapsUrl: e.target.value })} placeholder="Google Maps link · optional" />
           <FieldWithIcon icon={<Icons.Globe size={16} />} value={d.siteUrl} onChange={(e) => v.a.setDraft({ siteUrl: e.target.value })} placeholder="Website link · optional" />
           {d.image ? (
@@ -687,8 +713,8 @@ function buildView(state, actions, opts) {
   const statusFilters = [mkStatusChip('all', 'All', statusCounts.all, false), mkStatusChip('idea', 'Ideas', statusCounts.idea, false), mkStatusChip('scheduled', 'Scheduled', statusCounts.scheduled, false), mkStatusChip('important', 'Important', statusCounts.important, true)];
 
   const catOptions = state.categories.map(c => ({ id: c.id, name: c.name }));
-  const customCats = state.categories.filter(c => c.custom).map(c => { const t = toneOf(c); return { id: c.id, name: c.name, dotStyle: { width: 12, height: 12, borderRadius: '50%', background: t.fg, flexShrink: 0 }, rename: (e) => actions.renameCategory(c.id, e.target.value), remove: () => actions.deleteCategory(c.id) }; });
-  const defaultChips = state.categories.filter(c => !c.custom).map(c => { const t = toneOf(c); return { name: c.name, style: { ...chipBase, background: t.bg, color: t.fg } }; });
+  // Every category is editable — defaults and custom alike can be renamed/deleted.
+  const manageCats = state.categories.map(c => { const t = toneOf(c); return { id: c.id, name: c.name, custom: c.custom, dotStyle: { width: 12, height: 12, borderRadius: '50%', background: t.fg, flexShrink: 0 }, rename: (e) => actions.renameCategory(c.id, e.target.value), remove: () => actions.deleteCategory(c.id) }; });
   const newTone = TONE[TONE_CYCLE[state.categories.length % TONE_CYCLE.length]];
 
   const activeName = af === 'all' ? '' : (catById[af] ? catById[af].name : '');
@@ -702,7 +728,7 @@ function buildView(state, actions, opts) {
   return {
     s: state, a: actions, allById, primary, partner, members, me,
     stop: (e) => e.stopPropagation(),
-    ideas, catFilters, statusFilters, catOptions, customCats, defaultChips,
+    ideas, catFilters, statusFilters, catOptions, manageCats,
     isEmpty: vis.length === 0,
     emptyText: (af === 'all' && sf === 'all') ? 'No ideas yet. Add the first thing you two want to do.' : 'Nothing matches these filters.',
     listHeading, planLabel: ideaCount + ' to plan',

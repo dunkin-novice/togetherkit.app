@@ -43,25 +43,19 @@ function LabelsPanel({ v, maxWidth }) {
         <button onClick={v.toggleLabels} style={{ background: 'none', border: 'none', color: '#a8794f', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Done</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={uppercaseLabel}>Default</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-          {v.defaultChips.map((d, i) => <span key={i} style={d.style}>{d.name}</span>)}
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span style={uppercaseLabel}>Your labels</span>
-        {v.hasCustom ? (
+        {v.hasLabels ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {v.customLabels.map(cl => (
+            {v.manageLabels.map(cl => (
               <div key={cl.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={cl.dotStyle} />
                 <input value={cl.name} onChange={cl.rename} style={labelInput} />
-                <button onClick={cl.remove} style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
+                <button onClick={cl.remove} title="Delete label" style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
               </div>
             ))}
           </div>
         ) : (
-          <span style={{ fontSize: 13, color: '#b3a99c', fontWeight: 600 }}>No custom labels yet — add one below.</span>
+          <span style={{ fontSize: 13, color: '#b3a99c', fontWeight: 600 }}>No labels yet — add one below.</span>
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: '1px solid #f0ebe2', paddingTop: 14 }}>
@@ -76,11 +70,11 @@ function LabelsPanel({ v, maxWidth }) {
 // ── Brand header ────────────────────────────────────────────────────────────
 function Brand({ titleSize, subSize, dot }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <a href="../" title="Back to Together" style={{ display: 'flex', flexDirection: 'column', gap: 5, textDecoration: 'none', color: 'inherit' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}><Icons.Logo size={dot} /></div>
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: titleSize, fontWeight: 700, margin: 0, color: '#3a352f', letterSpacing: '.3px' }}>Together</h1>
       <p style={{ margin: 0, fontSize: subSize, color: '#9a9186', fontWeight: 600 }}>Shared shopping list for us</p>
-    </div>
+    </a>
   );
 }
 

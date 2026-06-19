@@ -130,11 +130,11 @@ function buildTogetherView(state, actions, opts) {
   ];
 
   const labelOptions = state.labels.map(l => ({ id: l.id, name: l.name }));
-  const customLabels = state.labels.filter(l => l.custom).map(l => {
+  // Every label is editable — defaults and custom alike can be renamed/deleted.
+  const manageLabels = state.labels.map(l => {
     const t = toneOf(l);
-    return { id: l.id, name: l.name, dotStyle: { width: '12px', height: '12px', borderRadius: '50%', background: t.fg, flexShrink: 0 }, rename: (e) => actions.renameLabel(l.id, e.target.value), remove: () => actions.deleteLabel(l.id) };
+    return { id: l.id, name: l.name, custom: l.custom, dotStyle: { width: '12px', height: '12px', borderRadius: '50%', background: t.fg, flexShrink: 0 }, rename: (e) => actions.renameLabel(l.id, e.target.value), remove: () => actions.deleteLabel(l.id) };
   });
-  const defaultChips = state.labels.filter(l => !l.custom).map(l => { const t = toneOf(l); return { name: l.name, style: { ...baseChip, background: t.bg, color: t.fg } }; });
   const newTone = TONES[state.labels.length % TONES.length];
 
   const activeName = af === 'all' ? '' : (labelById[af] ? labelById[af].name : '');
@@ -194,10 +194,9 @@ function buildTogetherView(state, actions, opts) {
   const bulkTargetId = state.bulkLabel || (af !== 'all' ? af : (state.labels[0] && state.labels[0].id));
 
   return {
-    items, showDate, filters, statusFilters, labelOptions, customLabels, defaultChips,
+    items, showDate, filters, statusFilters, labelOptions, manageLabels,
     unitSuggestions: D.UNIT_SUGGESTIONS,
-    hasCustom: customLabels.length > 0,
-    noCustom: customLabels.length === 0,
+    hasLabels: manageLabels.length > 0,
     isEmpty: visible.length === 0,
     emptyText: (af === 'all' && sf === 'all') ? 'Nothing here yet. Add the first thing you need.' : 'Nothing matches these filters.',
     listHeading,
