@@ -78,6 +78,7 @@ const DIcons = {
   Check: ({ size = 14, stroke = 3, color }) => <DSvg size={size} stroke={stroke} color={color}><path d="M4 12l5 5 11-12" /></DSvg>,
   Chevron: ({ size = 16, stroke = 2.4, open = true }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .18s ease' }}><path d="M6 9l6 6 6-6" /></svg>),
   Bug: ({ size = 21, stroke = 1.8 }) => (<DSvg size={size} stroke={stroke}><path d="M12 7.5v12.5" /><ellipse cx="12" cy="13.5" rx="5" ry="6.5" /><path d="M7 11 3 8.5M17 11l4-2.5M7 14.5H2.5M17 14.5h4.5M7.6 18 4 20.5M16.4 18 20 20.5" /><path d="M9 6.2a3 3 0 0 1 6 0" /></DSvg>),
+  Trash: ({ size = 17, stroke = 2, color }) => (<DSvg size={size} stroke={stroke} color={color}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></DSvg>),
   Logo: ({ size = 18, primary, partner }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
       <span style={{ width: size, height: size, borderRadius: '50%', background: primary }} />
@@ -279,6 +280,54 @@ function LinkButtons({ idea }) {
     </Fragment>
   );
 }
+// Swipe-left-to-delete wrapper (same gesture as the shopping list). Drag a
+// card/row left to reveal a red Delete affordance; release past the threshold
+// removes it, a tap passes through, a vertical drag yields to scrolling.
+function DSwipeRow({ onDelete, radius = 0, frontBg, children }) {
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const st = useRef(null);
+  const dxRef = useRef(0);
+  const movedRef = useRef(false);
+  const THRESHOLD = 88, MAX = 128;
+  const applyDx = (n) => { dxRef.current = n; setDx(n); };
+  const onPointerDown = (e) => {
+    if (removing) return;
+    if (e.target.closest('button, a, input, select, label')) return;
+    st.current = { x: e.clientX, y: e.clientY, active: false };
+    movedRef.current = false;
+  };
+  const onPointerMove = (e) => {
+    if (!st.current || removing) return;
+    const dX = e.clientX - st.current.x, dY = e.clientY - st.current.y;
+    if (!st.current.active) {
+      if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} }
+      else if (Math.abs(dY) > 10) { st.current = null; return; }
+    }
+    if (st.current && st.current.active) { const next = Math.max(-MAX, Math.min(0, dX)); applyDx(next); if (next < -6) movedRef.current = true; }
+  };
+  const finish = () => {
+    if (!st.current) { setDragging(false); return; }
+    const active = st.current.active; st.current = null; setDragging(false);
+    if (!active) return;
+    if (dxRef.current <= -THRESHOLD) { setRemoving(true); window.setTimeout(() => onDelete && onDelete(), 200); }
+    else applyDx(0);
+  };
+  return (
+    <div style={{ position: 'relative' }}>
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: radius, background: '#c4604c', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, paddingRight: 22, color: '#fff', fontWeight: 800, fontSize: 14, opacity: (dx < 0 || removing) ? 1 : 0 }}>
+        <DIcons.Trash size={17} /> Delete
+      </div>
+      <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={finish} onPointerCancel={finish}
+        onClickCapture={(e) => { if (movedRef.current) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; } }}
+        style={{ position: 'relative', background: frontBg, transform: removing ? 'translateX(-110%)' : ('translateX(' + dx + 'px)'), transition: dragging ? 'none' : 'transform .2s cubic-bezier(.3,.7,.4,1), opacity .2s ease', opacity: removing ? 0 : 1, touchAction: 'pan-y' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function IdeaCard({ idea, partner }) {
   return (
     <div onClick={idea.open} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, background: '#fff', borderRadius: 18, cursor: 'pointer', border: idea.important ? '1.5px solid #e7d3a3' : '1px solid transparent', boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.035)' }}>
@@ -681,6 +730,7 @@ function buildView(state, actions, opts) {
       openImg: (e) => { e.stopPropagation(); actions.set({ imageId: it.id }); },
       star: (e) => { e.stopPropagation(); actions.toggleImportant(it.id); },
       remove: (e) => { e.stopPropagation(); actions.remove(it.id); },
+      deleteSelf: () => actions.remove(it.id),
       circle: (e) => { e.stopPropagation(); if (it.scheduled) actions.unschedule(it.id); else actions.openSchedule(it.id); },
     };
   };
@@ -811,7 +861,11 @@ function Board({ v, isDesktop, primary, partner }) {
           <div style={{ display: 'grid', gridTemplateColumns: DESK_COLS, gap: 14, alignItems: 'center', padding: '16px 6px', borderBottom: '1px solid #f0ebe2' }}>
             <span />{['Idea', 'Category', 'Added by', 'Status'].map(h => <span key={h} style={{ fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.7px', textTransform: 'uppercase' }}>{h}</span>)}<span />
           </div>
-          {v.ideas.map(idea => <IdeaRow key={idea.id} idea={idea} partner={partner} />)}
+          {v.ideas.map(idea => (
+            <DSwipeRow key={idea.id} radius={0} frontBg={idea.important ? '#fdf8ee' : '#fff'} onDelete={idea.deleteSelf}>
+              <IdeaRow idea={idea} partner={partner} />
+            </DSwipeRow>
+          ))}
           {v.isEmpty && <EmptyState text={v.emptyText} pad="44px 20px" />}
         </div>
       ) : (
@@ -827,7 +881,11 @@ function Board({ v, isDesktop, primary, partner }) {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {v.ideas.map(idea => <IdeaCard key={idea.id} idea={idea} partner={partner} />)}
+            {v.ideas.map(idea => (
+              <DSwipeRow key={idea.id} radius={18} onDelete={idea.deleteSelf}>
+                <IdeaCard idea={idea} partner={partner} />
+              </DSwipeRow>
+            ))}
             {v.isEmpty && <EmptyState text={v.emptyText} pad="34px 20px" />}
           </div>
         </Fragment>
