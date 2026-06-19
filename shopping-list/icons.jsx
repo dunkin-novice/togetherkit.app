@@ -53,6 +53,14 @@ const Icons = {
     </Svg>
   ),
 
+  Share: ({ size = 17, stroke = 2 }) => (
+    <Svg size={size} stroke={stroke}>
+      <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
+      <path d="M16 6l-4-4-4 4" />
+      <path d="M12 2v13" />
+    </Svg>
+  ),
+
   Trash: ({ size = 17, stroke = 2 }) => (
     <Svg size={size} stroke={stroke}>
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />

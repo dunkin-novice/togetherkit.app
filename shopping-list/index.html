@@ -7,7 +7,11 @@
 <meta name="description" content="A shared shopping list for two — add, label and check things off together, in real time." />
 <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
 <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+<link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#e8e3da" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Together" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <!-- Open Graph / preview card -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Together" />
@@ -69,7 +73,7 @@ function useIsDesktop(breakpoint = 720) {
 function App() {
   const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
   const { TweaksPanel, TweakSection, TweakColor, TweakToggle } = window;
-  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, SwipeRow, uppercaseLabel } = window.TogetherUI;
+  const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, SwipeRow, ShareButton, uppercaseLabel } = window.TogetherUI;
   const { AddModal, BulkModal, DetailModal, ImageModal, BugModal } = window.TogetherModals;
 
   const primary = tweaks.primaryColor || '#c98a5c';
@@ -177,6 +181,9 @@ function App() {
       <datalist id="together-units">
         {v.unitSuggestions.map(u => <option key={u} value={u} />)}
       </datalist>
+
+      {/* fixed share button (top-left, mirrors the bug button) */}
+      <ShareButton />
 
       {/* fixed bug-report button */}
       <button onClick={v.openBug} title="Report a problem"

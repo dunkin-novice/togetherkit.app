@@ -1,0 +1,14 @@
+{
+  "name": "Together — Shopping List",
+  "short_name": "Together",
+  "description": "A shared shopping list for two, in real time.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#e8e3da",
+  "theme_color": "#e8e3da",
+  "icons": [
+    { "src": "../apple-touch-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "../apple-touch-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+  ]
+}

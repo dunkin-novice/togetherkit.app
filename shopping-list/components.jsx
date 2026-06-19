@@ -231,6 +231,30 @@ function SwipeRow({ onDelete, radius = 0, frontBg, children }) {
   );
 }
 
+// ── Share button ────────────────────────────────────────────────────────────
+// Shares the current URL (which carries the room code in its hash), so the other
+// person opens the same shared list. Native share sheet on phones; clipboard
+// copy with a brief "Link copied!" confirmation elsewhere.
+function ShareButton() {
+  const [copied, setCopied] = React.useState(false);
+  const onShare = async () => {
+    const url = location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Together', text: 'Our shopping list', url }); } catch (e) {}
+      return;
+    }
+    try { await navigator.clipboard.writeText(url); } catch (e) {}
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+  return (
+    <button onClick={onShare} title="Share this list"
+      style={{ position: 'fixed', top: 24, left: 24, zIndex: 900, height: 46, padding: '0 16px', borderRadius: 999, border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
+      <Icons.Share size={17} /> {copied ? 'Link copied!' : 'Share'}
+    </button>
+  );
+}
+
 // shared inline style fragments
 const uppercaseLabel = { fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' };
 const labelInput = { flex: 1, border: 'none', background: '#f5f0e8', borderRadius: 11, padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', fontWeight: 700, color: '#3a352f', outline: 'none' };
@@ -239,5 +263,5 @@ const iconBtn = { border: 'none', background: 'none', padding: 2, cursor: 'point
 const importantTag = { fontSize: 11, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '3px 9px', borderRadius: 8 };
 
 Object.assign(window, {
-  TogetherUI: { LabelFilters, StatusFilters, LabelsPanel, Brand, ItemCard, ItemRow, EmptyState, SwipeRow, uppercaseLabel },
+  TogetherUI: { LabelFilters, StatusFilters, LabelsPanel, Brand, ItemCard, ItemRow, EmptyState, SwipeRow, ShareButton, uppercaseLabel },
 });
