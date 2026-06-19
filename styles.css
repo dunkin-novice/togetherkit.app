@@ -1,0 +1,105 @@
+/* Together — Shared Shopping List · design tokens & global styles */
+
+:root {
+  --font-sans: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Quicksand', 'Nunito', -apple-system, sans-serif;
+
+  /* Surfaces — warm beige paper palette */
+  --bg: #e8e3da;          /* page */
+  --panel: #f6f4ef;       /* app shell */
+  --surface: #ffffff;     /* cards / inputs */
+  --surface-subtle: #f5f0e8;
+  --border: #ece6db;
+  --border-soft: #f0ebe2;
+
+  /* Text */
+  --text: #3a352f;
+  --text-secondary: #7a7166;
+  --text-muted: #9a9186;
+  --text-faint: #aaa093;
+
+  /* Brand — overridable at runtime via the Tweaks panel */
+  --primary: #c98a5c;     /* terracotta (user A) */
+  --partner: #8a9b6e;     /* sage (user B) */
+  --primary-soft: #f4e8dd;
+  --primary-text: #a8794f;
+
+  /* Status */
+  --status-buy-bg: #f6ebdc;
+  --status-buy-fg: #b07d42;
+  --status-done-bg: #e7ede0;
+  --status-done-fg: #6f7d52;
+  --star: #e0a93b;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+
+  --shadow-sm: 0 1px 2px rgba(58,53,47,.05), 0 6px 16px rgba(58,53,47,.035);
+  --shadow-md: 0 1px 2px rgba(58,53,47,.05), 0 10px 30px rgba(58,53,47,.05);
+  --shadow-lg: 0 2px 4px rgba(58,53,47,.06), 0 30px 60px rgba(58,53,47,.12);
+  --shadow-modal: 0 30px 70px rgba(58,53,47,.32);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  font-family: var(--font-sans);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+input::placeholder,
+textarea::placeholder { color: #b6ab9c; }
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+}
+
+button { font-family: inherit; }
+
+/* Animations used by modals */
+@keyframes tog-pop { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes tog-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* App shell — one responsive layout (the design preview showed mobile + desktop
+   side by side; here a single column adapts to the viewport). */
+.app {
+  min-height: 100vh;
+  padding: 28px 16px 64px;
+  display: flex;
+  justify-content: center;
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 1024px;
+  background: var(--panel);
+  border: 1px solid #efe9e0;
+  border-radius: 30px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.app-body {
+  padding: 28px 18px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+@media (min-width: 720px) {
+  .app { padding: 40px 24px 72px; }
+  .app-shell { border-radius: 22px; }
+  .app-body { padding: 38px 44px 46px; gap: 22px; }
+}
+
+/* Scrollbars inside modals */
+.tog-scroll { scrollbar-width: thin; scrollbar-color: rgba(58,53,47,.18) transparent; }
+.tog-scroll::-webkit-scrollbar { width: 8px; }
+.tog-scroll::-webkit-scrollbar-thumb { background: rgba(58,53,47,.18); border-radius: 4px; }
