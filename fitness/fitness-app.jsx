@@ -145,10 +145,21 @@ function buildView(state, actions, opts) {
   const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), remove: () => actions.removeWorkout(w.id) }));
   const bodyByDate = state.body.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(b => ({ ...b, color: colorOf(b.byUser), initial: initialOf(b.byUser, b.byName), who: nameOf(b.byUser, b.byName), remove: () => actions.removeBody(b.id) }));
 
+  // ── her-vs-you comparison ──
+  const weekAgo = Date.now() - 7 * 86400000;
+  const stat = {};
+  members.forEach(m => { stat[m.uid] = { sets: 0, vol: 0, weekSets: 0, weekVol: 0, pr: {} }; });
+  state.workouts.forEach(w => { const s = stat[w.byUser]; if (!s) return; s.sets++; const vol = (Number(w.weight) || 0) * (Number(w.reps) || 1); s.vol += vol; if (w.weight != null && (s.pr[w.exercise] == null || w.weight > s.pr[w.exercise])) s.pr[w.exercise] = Number(w.weight); if (ts(w.date) >= weekAgo) { s.weekSets++; s.weekVol += vol; } });
+  const latestBody = {}; state.body.forEach(b => { const c = latestBody[b.byUser]; if (!c || b.date > c.date) latestBody[b.byUser] = b; });
+  const compExercises = [...new Set(state.workouts.map(w => w.exercise))].sort();
+  const comparePeople = members.map(m => ({ uid: m.uid, name: nameOf(m.uid), color: colorOf(m.uid), initial: initialOf(m.uid), stat: stat[m.uid] || { sets: 0, vol: 0, weekSets: 0, weekVol: 0, pr: {} }, body: latestBody[m.uid] || null }));
+  const prRows = compExercises.map(ex => { const cells = comparePeople.map(p => ({ uid: p.uid, weight: p.stat.pr[ex] != null ? p.stat.pr[ex] : null })); const best = Math.max(-1, ...cells.map(c => c.weight == null ? -1 : c.weight)); return { exercise: ex, cells: cells.map(c => ({ ...c, win: c.weight != null && c.weight === best && best > 0 })) }; });
+
   return {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
     workouts: workoutsByDate, body: bodyByDate,
+    compare: { people: comparePeople, prRows },
     exSuggestions: (q) => { const t = (q || '').toLowerCase().trim(); const base = t ? EXERCISES.filter(e => e.toLowerCase().includes(t)) : EXERCISES; return base.slice(0, 8); },
   };
 }
@@ -223,6 +234,54 @@ function useIsDesktop(bp = 720) { const get = () => typeof window !== 'undefined
 const card = { background: '#fff', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.035)' };
 const selStyle = { border: '1px solid #ece6db', background: '#fff', borderRadius: 10, padding: '7px 26px 7px 11px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' };
 
+function CompareSection({ v }) {
+  const people = v.compare.people, rows = v.compare.prRows;
+  const fmt = (n) => Math.round(n * 10) / 10;
+  const Big = ({ p }) => (
+    <div style={{ flex: 1, minWidth: 0, textAlign: 'center', background: '#faf8f4', borderRadius: 14, padding: '12px 8px' }}>
+      <span style={{ width: 30, height: 30, borderRadius: '50%', background: p.color, color: '#fff', fontWeight: 800, fontSize: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>{p.initial}</span>
+      <div style={{ fontSize: 13, fontWeight: 800, color: '#3a352f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: p.color, fontFamily: "'Quicksand',sans-serif", marginTop: 4 }}>{p.stat.weekSets}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#9a9186' }}>sets this week</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#9a9186', marginTop: 4 }}>{fmt(p.stat.weekVol)} vol · {p.stat.sets} all-time</div>
+    </div>
+  );
+  return (
+    <Fragment>
+      <div style={card}>
+        <span style={upper}>This week</span>
+        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>{people.map(p => <Big key={p.uid} p={p} />)}</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <span style={upper}>Personal records — heaviest 🏆</span>
+        {rows.length === 0 && <div style={{ ...card, textAlign: 'center', color: '#b3a99c', fontWeight: 600, fontSize: 14, padding: '24px 10px' }}>Log some sets to compare PRs.</div>}
+        {rows.map(r => (
+          <div key={r.exercise} style={{ ...card, padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 800, color: '#3a352f' }}>{r.exercise}</span>
+            <div style={{ display: 'flex', gap: 7 }}>
+              {r.cells.map(c => { const p = people.find(x => x.uid === c.uid) || {}; return (
+                <span key={c.uid} title={p.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 800, color: c.win ? '#fff' : (c.weight == null ? '#c3bbae' : '#7a7166'), background: c.win ? (p.color || '#6f9c5a') : '#f2ece2', padding: '4px 9px', borderRadius: 9 }}>{c.win && '🏆'}<span style={{ width: 7, height: 7, borderRadius: '50%', background: c.win ? 'rgba(255,255,255,.8)' : (p.color || '#ccc') }} />{c.weight == null ? '–' : fmt(c.weight)}</span>
+              ); })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={card}>
+        <span style={upper}>Body now</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {people.map(p => (
+            <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 24, borderRadius: '50%', background: p.color, color: '#fff', fontWeight: 800, fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{p.initial}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#3a352f', flex: 1 }}>{p.name}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: p.body ? '#7a7166' : '#c3bbae' }}>{p.body ? ([p.body.weight != null ? p.body.weight + ' ' + p.body.unit : null, p.body.bodyFat != null ? 'fat ' + p.body.bodyFat + '%' : null, p.body.muscleMass != null ? 'musc ' + p.body.muscleMass : null].filter(Boolean).join(' · ') || '—') : 'no entry yet'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Fragment>
+  );
+}
+
 function Board({ v, isDesktop, primary, partner }) {
   const tab = v.s.tab;
   const addBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: isDesktop ? '12px 22px' : 14, fontWeight: 800, fontSize: isDesktop ? 14.5 : 15, cursor: 'pointer', fontFamily: 'inherit', width: isDesktop ? 'auto' : '100%' };
@@ -232,13 +291,13 @@ function Board({ v, isDesktop, primary, partner }) {
   return (
     <div style={{ padding: isDesktop ? '38px 44px 46px' : '28px 18px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 640, margin: '0 auto' }}>
       {isDesktop
-        ? <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} /><button onClick={() => v.a.set(tab === 'workouts' ? { wAddOpen: true } : { bAddOpen: true })} style={addBtn}><FI.Plus size={17} />{tab === 'workouts' ? 'Log a set' : 'Log body stats'}</button></div>
+        ? <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} />{tab !== 'compare' && <button onClick={() => v.a.set(tab === 'workouts' ? { wAddOpen: true } : { bAddOpen: true })} style={addBtn}><FI.Plus size={17} />{tab === 'workouts' ? 'Log a set' : 'Log body stats'}</button>}</div>
         : <Fragment><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} /></div></Fragment>}
 
-      <div style={{ display: 'flex', gap: 4, background: '#ece6db', borderRadius: 13, padding: 4 }}><TabBtn id="workouts" label="🏋️ Workouts" /><TabBtn id="body" label="📊 Body" /></div>
-      {!isDesktop && <button onClick={() => v.a.set(tab === 'workouts' ? { wAddOpen: true } : { bAddOpen: true })} style={addBtn}><FI.Plus size={16} />{tab === 'workouts' ? 'Log a set' : 'Log body stats'}</button>}
+      <div style={{ display: 'flex', gap: 4, background: '#ece6db', borderRadius: 13, padding: 4 }}><TabBtn id="workouts" label="🏋️ Workouts" /><TabBtn id="body" label="📊 Body" /><TabBtn id="compare" label="🏆 Compare" /></div>
+      {!isDesktop && tab !== 'compare' && <button onClick={() => v.a.set(tab === 'workouts' ? { wAddOpen: true } : { bAddOpen: true })} style={addBtn}><FI.Plus size={16} />{tab === 'workouts' ? 'Log a set' : 'Log body stats'}</button>}
 
-      {tab === 'workouts' ? (
+      {tab === 'compare' ? <CompareSection v={v} /> : tab === 'workouts' ? (
         <Fragment>
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
