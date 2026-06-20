@@ -110,20 +110,28 @@
 
   // A custom-list card with swipe-left to reveal Pin / Archive / Delete (or
   // Unarchive / Delete for archived lists). Tap the card to open the list.
-  function HubSwipeCard({ list, onPin, onArchive, onUnarchive, onDelete }) {
+  function HubSwipeCard({ list, onHold, onPin, onArchive, onUnarchive, onDelete }) {
     const TRAY = list.archived ? 124 : 168;
     const [dx, setDx] = React.useState(0);
     const [dragging, setDragging] = React.useState(false);
     const st = React.useRef(null); const dxRef = React.useRef(0); const movedRef = React.useRef(false);
+    const holdRef = React.useRef(null); const heldRef = React.useRef(false);
+    const clearHold = () => { if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null; } };
     const apply = (n) => { dxRef.current = n; setDx(n); };
-    const down = (e) => { if (e.target.closest('button')) return; st.current = { x: e.clientX, y: e.clientY, base: dxRef.current, active: false }; movedRef.current = false; };
+    const down = (e) => {
+      if (e.target.closest('button')) return;
+      st.current = { x: e.clientX, y: e.clientY, base: dxRef.current, active: false }; movedRef.current = false; heldRef.current = false;
+      clearHold();
+      holdRef.current = setTimeout(() => { holdRef.current = null; heldRef.current = true; apply(0); if (onHold) onHold(); }, 480);
+    };
     const move = (e) => {
       if (!st.current) return;
       const dX = e.clientX - st.current.x, dY = e.clientY - st.current.y;
+      if (Math.abs(dX) > 8 || Math.abs(dY) > 8) clearHold();
       if (!st.current.active) { if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} } else if (Math.abs(dY) > 10) { st.current = null; return; } }
       if (st.current.active) { const n = Math.max(-TRAY, Math.min(0, st.current.base + dX)); apply(n); if (Math.abs(n - st.current.base) > 6) movedRef.current = true; }
     };
-    const up = () => { if (!st.current) { setDragging(false); return; } const a = st.current.active; st.current = null; setDragging(false); if (!a) return; apply(dxRef.current < -TRAY / 2 ? -TRAY : 0); };
+    const up = () => { clearHold(); if (!st.current) { setDragging(false); return; } const a = st.current.active; st.current = null; setDragging(false); if (!a) return; apply(dxRef.current < -TRAY / 2 ? -TRAY : 0); };
     const close = () => apply(0);
     const trayBtn = { width: 46, height: 46, borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' };
     return (
@@ -135,7 +143,8 @@
           <button onClick={() => { close(); onDelete(); }} title="Delete" style={{ ...trayBtn, background: '#c4604c' }}><window.Icons.Trash size={20} color="#fff" /></button>
         </div>
         <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
-          onClickCapture={(e) => { if (movedRef.current || dxRef.current !== 0) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; if (dxRef.current !== 0) apply(0); } }}
+          onContextMenu={(e) => e.preventDefault()}
+          onClickCapture={(e) => { if (movedRef.current || dxRef.current !== 0 || heldRef.current) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; heldRef.current = false; if (dxRef.current !== 0) apply(0); } }}
           style={{ position: 'relative', transform: 'translateX(' + dx + 'px)', transition: dragging ? 'none' : 'transform .2s cubic-bezier(.3,.7,.4,1)', touchAction: 'pan-y' }}>
           <a className="feature" href={'./list/?id=' + encodeURIComponent(list.id)} style={{ marginBottom: 0 }}>
             <span className="ic" style={{ fontSize: 22, lineHeight: 1, overflow: 'hidden', padding: 0 }}>{list.icon_image ? <img src={list.icon_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (list.emoji || '📋')}</span>
@@ -180,6 +189,38 @@
     );
   }
 
+  // Name + icon editor, reused for renaming and duplicating a list.
+  function ListSetup({ title, confirmLabel, initial, onClose, onConfirm }) {
+    const [name, setName] = React.useState(initial.name || '');
+    const [emoji, setEmoji] = React.useState(initial.emoji || '📋');
+    const [iconImage, setIconImage] = React.useState(initial.iconImage || null);
+    const [busy, setBusy] = React.useState(false);
+    const onIconFile = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const img = new Image(); img.onload = () => { const S = 96, c = document.createElement('canvas'); c.width = S; c.height = S; const ctx = c.getContext('2d'); const ratio = Math.max(S / img.width, S / img.height), w = img.width * ratio, h = img.height * ratio; ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h); setIconImage(c.toDataURL('image/jpeg', 0.82)); }; img.src = r.result; }; r.readAsDataURL(f); };
+    const go = async () => { if (!name.trim() || busy) return; setBusy(true); try { await onConfirm({ name: name.trim(), emoji, iconImage }); } catch (e) { setBusy(false); } };
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1320, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: '#f6f4ef', borderRadius: 26, boxShadow: '0 24px 60px rgba(58,53,47,.34)', padding: 22, maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 22, fontWeight: 700, margin: 0, color: '#3a352f' }}>{title}</h2>
+            <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer' }}>×</button>
+          </div>
+          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') go(); }} placeholder="List name" autoFocus style={{ width: '100%', border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '13px 15px', fontSize: 15, fontFamily: 'inherit', fontWeight: 700, color: '#3a352f', outline: 'none' }} />
+          <div style={{ margin: '14px 0 8px', fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' }}>Icon — pick, type your own, or add an image</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ width: 46, height: 46, borderRadius: 12, background: '#f4e8dd', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: 24 }}>{iconImage ? <img src={iconImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : emoji}</span>
+            <input value={iconImage ? '' : emoji} onChange={(e) => { setIconImage(null); setEmoji(e.target.value || '📋'); }} placeholder="Type" maxLength={4} style={{ width: 64, textAlign: 'center', fontSize: 20, border: '1px solid #ece6db', background: '#fff', borderRadius: 11, padding: '9px 6px', fontFamily: 'inherit', outline: 'none' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #ece6db', background: '#fff', borderRadius: 11, padding: '10px 14px', fontSize: 13, fontWeight: 800, color: '#7a7166', cursor: 'pointer' }}>Image<input type="file" accept="image/*" onChange={onIconFile} style={{ display: 'none' }} /></label>
+            {iconImage && <button onClick={() => setIconImage(null)} title="Remove image" style={{ border: 'none', background: '#f6ece9', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 15, cursor: 'pointer' }}>×</button>}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {EMOJIS.map(em => { const sel = !iconImage && emoji === em; return <button key={em} onClick={() => { setEmoji(em); setIconImage(null); }} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid ' + (sel ? '#c98a5c' : '#ece6db'), background: sel ? '#f4e8dd' : '#fff', fontSize: 20, cursor: 'pointer' }}>{em}</button>; })}
+          </div>
+          <button onClick={go} disabled={busy || !name.trim()} style={{ marginTop: 20, width: '100%', background: name.trim() ? '#c98a5c' : '#d9cfc0', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontWeight: 800, fontSize: 15, cursor: name.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>{busy ? 'Working…' : confirmLabel}</button>
+        </div>
+      </div>
+    );
+  }
+
   function Hub({ sx }) {
     const { AccountButton, AccountSheet, HomeButton } = window.TogetherAccount;
     const BE = window.TogetherBackend;
@@ -199,6 +240,8 @@
     const [archivedOpen, setArchivedOpen] = React.useState(false);
     const [hidden, setHidden] = React.useState([]);
     const [templatesOpen, setTemplatesOpen] = React.useState(false);
+    const [menuList, setMenuList] = React.useState(null);
+    const [editList, setEditList] = React.useState(null);
     const [bug, setBug] = React.useState({ open: false, sent: false, text: '' });
 
     React.useEffect(() => {
@@ -239,6 +282,22 @@
     const activeLists = lists.filter(l => !l.archived).sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (a.pos - b.pos));
     const archivedLists = lists.filter(l => l.archived);
 
+    const renameSave = async ({ name, emoji, iconImage }) => {
+      const r = await BE.client.from('custom_lists').update({ name, emoji, icon_image: iconImage || null }).eq('id', editList.id);
+      if (r.error) console.warn('rename list', r.error.message);
+      setEditList(null);
+    };
+    const duplicateSave = async ({ name, emoji, iconImage }) => {
+      const src = editList.id, newId = BE.newId();
+      const r = await BE.client.from('custom_lists').insert({ id: newId, homespace_id: sx.homespaceId, name, emoji, icon_image: iconImage || null, created_by: sx.me && sx.me.uid, pos: Date.now() });
+      if (r.error) { console.warn('duplicate list', r.error.message); return; }
+      const labs = (await BE.client.from('custom_labels').select('*').eq('list_id', src)).data || [];
+      if (labs.length) await BE.client.from('custom_labels').insert(labs.map(l => ({ homespace_id: sx.homespaceId, list_id: newId, id: l.id, name: l.name, tone: l.tone, custom: l.custom, sort: l.sort })));
+      const items = (await BE.client.from('custom_items').select('*').eq('list_id', src)).data || [];
+      if (items.length) await BE.client.from('custom_items').insert(items.map(it => ({ id: BE.newId(), homespace_id: sx.homespaceId, list_id: newId, title: it.title, body: it.body, label_id: it.label_id, by_user: sx.me && sx.me.uid, by_name: sx.me && sx.me.name, date: it.date, done: it.done, important: it.important, pos: it.pos })));
+      setEditList(null);
+    };
+
     const saveHidden = (arr) => { setHidden(arr); BE.client.from('homespaces').update({ hidden_features: arr }).eq('id', sx.homespaceId).then(({ error }) => { if (error) console.warn('hidden update', error.message); }); };
     const hideFeature = (key) => saveHidden([...hidden.filter(k => k !== key), key]);
     const unhideFeature = (key) => { saveHidden(hidden.filter(k => k !== key)); setTemplatesOpen(false); };
@@ -271,7 +330,7 @@
             ))}
 
             {activeLists.map(l => (
-              <HubSwipeCard key={l.id} list={l} onPin={() => pinList(l)} onArchive={() => archiveList(l)} onDelete={() => deleteList(l)} />
+              <HubSwipeCard key={l.id} list={l} onHold={() => setMenuList(l)} onPin={() => pinList(l)} onArchive={() => archiveList(l)} onDelete={() => deleteList(l)} />
             ))}
 
             <button className="feature" onClick={() => setTemplatesOpen(true)} style={{ cursor: 'pointer', textAlign: 'left', border: '1px dashed #d9cbb7', background: 'transparent', font: 'inherit', width: '100%' }}>
@@ -289,7 +348,7 @@
               </button>
               {archivedOpen && (
                 <div className="features" style={{ marginTop: 12, opacity: .82 }}>
-                  {archivedLists.map(l => <HubSwipeCard key={l.id} list={l} onUnarchive={() => unarchiveList(l)} onDelete={() => deleteList(l)} />)}
+                  {archivedLists.map(l => <HubSwipeCard key={l.id} list={l} onHold={() => setMenuList(l)} onUnarchive={() => unarchiveList(l)} onDelete={() => deleteList(l)} />)}
                 </div>
               )}
             </React.Fragment>
@@ -359,6 +418,29 @@
             </div>
           </div>
         )}
+
+        {menuList && (() => {
+          const l = menuList; const close = () => setMenuList(null);
+          const row = { display: 'flex', alignItems: 'center', gap: 12, width: '100%', background: 'none', border: 'none', borderRadius: 12, padding: '13px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, color: '#3a352f', textAlign: 'left' };
+          return (
+            <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 1315, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 320, background: '#f6f4ef', borderRadius: 22, boxShadow: '0 24px 60px rgba(58,53,47,.34)', padding: 12 }}>
+                <div style={{ padding: '8px 12px 10px', display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 9, background: '#f4e8dd', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, overflow: 'hidden' }}>{l.icon_image ? <img src={l.icon_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (l.emoji || '📋')}</span>
+                  <span style={{ fontWeight: 800, fontSize: 14.5, color: '#3a352f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
+                </div>
+                <button style={row} onClick={() => { setEditList({ mode: 'rename', id: l.id, name: l.name, emoji: l.emoji, iconImage: l.icon_image }); close(); }}>✏️ Rename</button>
+                <button style={row} onClick={() => { setEditList({ mode: 'duplicate', id: l.id, name: 'Copy of ' + l.name, emoji: l.emoji, iconImage: l.icon_image }); close(); }}>📑 Duplicate</button>
+                {!l.archived && <button style={row} onClick={() => { pinList(l); close(); }}>⭐ {l.pinned ? 'Unpin' : 'Pin'}</button>}
+                {!l.archived && <button style={row} onClick={() => { archiveList(l); close(); }}>🗄️ Archive</button>}
+                {l.archived && <button style={row} onClick={() => { unarchiveList(l); close(); }}>↩️ Unarchive</button>}
+                <button style={{ ...row, color: '#b07a6e' }} onClick={() => { deleteList(l); close(); }}>🗑️ Delete</button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {editList && <ListSetup title={editList.mode === 'rename' ? 'Rename list' : 'Duplicate list'} confirmLabel={editList.mode === 'rename' ? 'Save' : 'Create copy'} initial={{ name: editList.name, emoji: editList.emoji, iconImage: editList.iconImage }} onClose={() => setEditList(null)} onConfirm={editList.mode === 'rename' ? renameSave : duplicateSave} />}
 
         {bug.open && (
           <div onClick={() => setBug({ open: false, sent: false, text: '' })} style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>

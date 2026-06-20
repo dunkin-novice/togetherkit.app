@@ -245,6 +245,7 @@ function DetailModal({ v }) {
               ? <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, margin: 0, color: '#3a352f', lineHeight: 1.15 }}>{v.detailName}</h2>
               : <input value={v.editName} onChange={v.setEditName} style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 13px', fontSize: 18, fontFamily: 'var(--font-display)', fontWeight: 700, color: '#3a352f', outline: 'none' }} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <button onClick={v.duplicateDetail} title="Duplicate" style={{ border:'none', background:'#ece6db', color:'#7a7166', width:30, height:30, borderRadius:9, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
               <button onClick={v.toggleDetailImportant} title="Mark important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}>
                 <MIcons.Star size={22} filled={v.detailImportant} />
               </button>

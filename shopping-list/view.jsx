@@ -276,6 +276,7 @@ function buildTogetherView(state, actions, opts) {
     closeDetail: () => actions.set({ detailId: null, editing: false }),
     stopProp: (e) => e.stopPropagation(),
     startEdit: () => actions.startEdit(),
+    duplicateDetail: () => actions.duplicateItem(),
     saveEdit: () => actions.saveEdit(),
     deleteDetail: () => { const id = state.detailId; actions.set({ detailId: null, editing: false }); actions.remove(id); },
     toggleDetailDone: () => {

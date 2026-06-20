@@ -195,6 +195,9 @@ function useIdeasStore(homespaceId, me, members) {
     },
 
     startEdit: () => { const it = ref.current.ideas.find(i => i.id === ref.current.detailId); if (!it) return; patch({ editing: true, edit: { name: it.name, catId: it.catId, mapsUrl: it.mapsUrl, siteUrl: it.siteUrl } }); },
+    // Close the detail view and open Add prefilled from this idea so the user can
+    // tweak and save a fresh copy. A duplicate starts unscheduled (no sched state).
+    duplicateItem: () => { const it = ref.current.ideas.find(i => i.id === ref.current.detailId); if (!it) return; patch({ detailId: null, editing: false, addOpen: true, draft: { name: it.name, catId: it.catId, mapsUrl: it.mapsUrl || '', siteUrl: it.siteUrl || '', image: it.image, important: it.important } }); },
     setEdit: (p) => patch(s => ({ edit: { ...s.edit, ...p } })),
     saveEdit: () => { const s = ref.current, e = s.edit, name = (e.name || '').trim(); if (!name) return; const upd = { name, catId: e.catId, mapsUrl: (e.mapsUrl || '').trim(), siteUrl: (e.siteUrl || '').trim() }; patch(st => ({ editing: false, ideas: st.ideas.map(it => it.id === st.detailId ? { ...it, ...upd } : it) })); db(client.from('ideas').update({ name: upd.name, cat_id: upd.catId, maps_url: upd.mapsUrl || null, site_url: upd.siteUrl || null, updated_at: new Date().toISOString() }).eq('id', s.detailId)); },
     deleteDetail: () => { const id = ref.current.detailId; patch({ detailId: null, editing: false }); patch(s => ({ ideas: s.ideas.filter(i => i.id !== id) })); db(client.from('ideas').delete().eq('id', id)); },
@@ -565,6 +568,7 @@ function DetailModal({ v, primary, partner }) {
               ? <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 24, fontWeight: 700, margin: 0, color: '#3a352f', lineHeight: 1.15 }}>{idea.name}</h2>
               : <input value={e.name} onChange={(ev) => v.a.setEdit({ name: ev.target.value })} style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 13px', fontSize: 18, fontFamily: "'Quicksand',sans-serif", fontWeight: 700, color: '#3a352f', outline: 'none' }} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <button onClick={v.a.duplicateItem} title="Duplicate" style={{ border:'none', background:'#ece6db', color:'#7a7166', width:30, height:30, borderRadius:9, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
               <button onClick={() => v.a.toggleImportant(idea.id)} title="Mark important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}><DIcons.Star size={22} filled={idea.important} /></button>
               <button onClick={() => v.a.set({ detailId: null, editing: false })} style={closeX}>×</button>
             </div>

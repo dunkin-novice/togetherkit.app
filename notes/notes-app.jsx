@@ -104,6 +104,7 @@ function useNotesStore(homespaceId, me) {
       db(client.from('note_labels').delete().eq('homespace_id', homespaceId).eq('id', id));
     },
     startEdit: () => { const n = ref.current.notes.find(x => x.id === ref.current.detailId); if (!n) return; patch({ editing: true, edit: { title: n.title, body: n.body, labelId: n.labelId || '' } }); },
+    duplicateItem: () => { const n = ref.current.notes.find(x => x.id === ref.current.detailId); if (!n) return; patch({ detailId: null, editing: false, addOpen: true, draft: { title: n.title, body: n.body, labelId: n.labelId || '', important: n.important } }); },
     setEdit: (p) => patch(s => ({ edit: { ...s.edit, ...p } })),
     saveEdit: () => { const s = ref.current, e = s.edit, title = (e.title || '').trim(); if (!title && !(e.body || '').trim()) return; const upd = { title: title || 'Untitled', body: e.body, labelId: e.labelId || null }; patch(st => ({ editing: false, notes: st.notes.map(n => n.id === st.detailId ? { ...n, ...upd } : n) })); db(client.from('notes').update({ title: upd.title, body: upd.body || null, label_id: upd.labelId, updated_at: new Date().toISOString() }).eq('id', s.detailId)); },
     deleteDetail: () => { const id = ref.current.detailId; patch({ detailId: null, editing: false }); patch(s => ({ notes: s.notes.filter(n => n.id !== id) })); db(client.from('notes').delete().eq('id', id)); },
@@ -284,6 +285,7 @@ function DetailModal({ v, primary, partner }) {
               ? <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 24, fontWeight: 700, margin: 0, color: '#3a352f', lineHeight: 1.15 }}>{note.title}</h2>
               : <input value={e.title} onChange={(ev) => v.a.setEdit({ title: ev.target.value })} style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 13px', fontSize: 18, fontFamily: "'Quicksand',sans-serif", fontWeight: 700, color: '#3a352f', outline: 'none' }} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <button onClick={v.a.duplicateItem} title="Duplicate" style={{ border: 'none', background: '#ece6db', color: '#7a7166', width: 30, height: 30, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
               <button onClick={() => v.a.toggleImportant(note.id)} title="Mark important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}><NI.Star size={22} filled={note.important} /></button>
               <button onClick={() => v.a.set({ detailId: null, editing: false })} style={closeX}>×</button>
             </div>

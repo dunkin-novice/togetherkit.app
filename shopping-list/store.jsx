@@ -146,6 +146,13 @@ function useTogetherStore(homespaceId, me) {
       if (!it) return;
       patch({ editing: true, edit: { name: it.name, qty: it.qty, unit: it.unit, labelId: it.labelId } });
     },
+    // Close detail, open Add prefilled from this item so the user can tweak and
+    // save a fresh copy (carries name, qty, unit, label, photo, important).
+    duplicateItem: () => {
+      const it = stateRef.current.items.find(i => i.id === stateRef.current.detailId);
+      if (!it) return;
+      patch({ detailId: null, editing: false, addOpen: true, draftName: it.name, draftQty: it.qty || 1, draftUnit: it.unit || 'pcs', draftLabel: it.labelId, draftImage: it.image || null, draftImportant: it.important });
+    },
     saveEdit: () => {
       const s = stateRef.current, e = s.edit;
       const name = (e.name || '').trim();
