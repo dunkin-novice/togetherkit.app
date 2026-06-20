@@ -75,6 +75,10 @@ const Icons = {
     </Svg>
   ),
 
+  Check: ({ size = 14, stroke = 3, color }) => (
+    <Svg size={size} stroke={stroke} color={color}><path d="M4 12l5 5 11-12" /></Svg>
+  ),
+
   // Brand mark — the two overlapping dots (primary + partner).
   Logo: ({ size = 18 }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>

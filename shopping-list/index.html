@@ -99,7 +99,7 @@ function Board({ sx }) {
   const { TweaksPanel, TweakSection, TweakColor, TweakToggle } = window;
   const { Brand, LabelFilters, StatusFilters, LabelsPanel, ItemCard, ItemRow, EmptyState, SwipeRow, uppercaseLabel } = window.TogetherUI;
   const { AddModal, BulkModal, DetailModal, ImageModal, BugModal } = window.TogetherModals;
-  const { AccountButton, AccountSheet } = window.TogetherAccount;
+  const { HomeButton, AccountButton, AccountSheet } = window.TogetherAccount;
   const [accountOpen, setAccountOpen] = React.useState(false);
 
   const primary = tweaks.primaryColor || '#c98a5c';
@@ -326,6 +326,7 @@ function Board({ sx }) {
       </datalist>
 
       {/* fixed account button (top-left) — names, members, invite, sign out */}
+      <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
 

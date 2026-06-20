@@ -86,6 +86,16 @@ function useNotesStore(homespaceId, me) {
       patch(st => ({ labels: [...st.labels, label], newLabelName: '' }));
       db(client.from('note_labels').insert(nlToRow(label, homespaceId, label.sort)));
     },
+    // create a label inline (from the Add dialog) and select it on the draft
+    createLabelInline: (name) => {
+      const s = ref.current; name = (name || '').trim(); if (!name) return;
+      const existing = s.labels.find(l => l.name.toLowerCase() === name.toLowerCase());
+      if (existing) { patch(st => ({ draft: { ...st.draft, labelId: existing.id } })); return; }
+      const tone = NTONE_CYCLE[s.labels.length % NTONE_CYCLE.length];
+      const label = { id: 'nl' + Date.now(), name, tone, custom: true, sort: s.labels.length };
+      patch(st => ({ labels: [...st.labels, label], draft: { ...st.draft, labelId: label.id } }));
+      db(client.from('note_labels').insert(nlToRow(label, homespaceId, label.sort)));
+    },
     renameLabel: (id, value) => { patch(s => ({ labels: s.labels.map(l => l.id === id ? { ...l, name: value } : l) })); db(client.from('note_labels').update({ name: value }).eq('homespace_id', homespaceId).eq('id', id)); },
     deleteLabel: (id) => {
       const s = ref.current, remaining = s.labels.filter(l => l.id !== id);
@@ -222,6 +232,9 @@ function LabelsPanel({ v, partner, maxWidth }) {
 function AddModal({ v, primary }) {
   if (!v.s.addOpen) return null;
   const d = v.s.draft;
+  const [showNew, setShowNew] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const createLabel = () => { const n = newLabel.trim(); if (!n) return; v.a.createLabelInline(n); setShowNew(false); setNewLabel(''); };
   return (
     <Overlay onClose={() => v.a.set({ addOpen: false })}>
       <Sheet stop={v.stop} maxWidth={380}>
@@ -233,12 +246,19 @@ function AddModal({ v, primary }) {
           <input value={d.title} onChange={(e) => v.a.setDraft({ title: e.target.value })} placeholder="Note title" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 17 }} autoFocus />
           <textarea value={d.body} onChange={(e) => v.a.setDraft({ body: e.target.value })} placeholder="Write anything…" style={{ width: '100%', minHeight: 130, resize: 'vertical', border: '1px solid #ece6db', background: '#fff', borderRadius: 14, padding: '13px 14px', fontSize: 14.5, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.6 }} />
           <div style={{ position: 'relative' }}>
-            <select value={d.labelId} onChange={(e) => v.a.setDraft({ labelId: e.target.value })} style={selectStyle}>
+            <select value={showNew ? '__new' : (d.labelId || '')} onChange={(e) => { const val = e.target.value; if (val === '__new') { setShowNew(true); } else { setShowNew(false); v.a.setDraft({ labelId: val }); } }} style={selectStyle}>
               <option value="">No label</option>
               {v.labelOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              <option value="__new">+ Create new label…</option>
             </select>
             <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><NI.Chevron size={15} /></span>
           </div>
+          {showNew && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') createLabel(); }} placeholder="New label name…" autoFocus style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 13px', fontSize: 14, fontFamily: 'inherit', fontWeight: 700, color: '#3a352f', outline: 'none' }} />
+              <button onClick={createLabel} style={{ background: 'var(--partner)', color: '#fff', border: 'none', borderRadius: 12, padding: '0 18px', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>Add</button>
+            </div>
+          )}
           <button onClick={() => v.a.setDraft({ important: !d.important })} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 13, border: '1px solid ' + (d.important ? '#e7d3a3' : '#ece6db'), background: d.important ? '#fdf8ee' : '#fff', color: d.important ? '#a8822f' : '#7a7166', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
             <NI.Star size={18} filled={d.important} color={d.important ? undefined : '#b9ad97'} /><span style={{ flex: 1, textAlign: 'left' }}>Mark as important</span>
           </button>
@@ -548,7 +568,7 @@ function App() {
 function BoardShell({ sx }) {
   const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
   const { TweaksPanel, TweakSection, TweakColor } = window;
-  const { AccountButton, AccountSheet } = window.TogetherAccount;
+  const { HomeButton, AccountButton, AccountSheet } = window.TogetherAccount;
   const [accountOpen, setAccountOpen] = useState(false);
   const primary = tweaks.primaryColor || '#c98a5c', partner = tweaks.partnerColor || '#8a9b6e';
   const isDesktop = useIsDesktop();
@@ -558,6 +578,7 @@ function BoardShell({ sx }) {
   return (
     <div className="app">
       <div className="app-shell"><Board v={v} isDesktop={isDesktop} primary={primary} partner={partner} /></div>
+      <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
       <button onClick={() => v.a.set({ bugOpen: true, bugSent: false })} title="Report a problem" style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}><NI.Bug size={21} /></button>

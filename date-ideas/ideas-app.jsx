@@ -1167,7 +1167,7 @@ function App() {
 function BoardShell({ sx }) {
   const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
   const { TweaksPanel, TweakSection, TweakColor } = window;
-  const { AccountButton, AccountSheet } = window.TogetherAccount;
+  const { HomeButton, AccountButton, AccountSheet } = window.TogetherAccount;
   const [accountOpen, setAccountOpen] = useState(false);
   const primary = tweaks.primaryColor || '#c98a5c';
   const partner = tweaks.partnerColor || '#8a9b6e';
@@ -1181,6 +1181,7 @@ function BoardShell({ sx }) {
         {state.syncing ? <EmptyState text="Syncing…" pad="64px 20px" /> : <Board v={v} isDesktop={isDesktop} primary={primary} partner={partner} />}
       </div>
 
+      <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
 
