@@ -89,7 +89,7 @@ function useTogetherSession() {
     if (!homespaceId || !session) return;
     let alive = true;
     const load = async () => {
-      const hsRow = await client.from('homespaces').select('id,name,created_by').eq('id', homespaceId).maybeSingle();
+      const hsRow = await client.from('homespaces').select('id,name,created_by,invites_enabled').eq('id', homespaceId).maybeSingle();
       const mem = await client.from('members').select('user_id,role,display_name,created_at').eq('homespace_id', homespaceId).order('created_at', { ascending: true });
       const ids = (mem.data || []).map(m => m.user_id);
       const profs = {};
@@ -147,6 +147,12 @@ function useTogetherSession() {
       const r = await client.from('invites').insert({ token, homespace_id: homespaceId, created_by: session.user.id });
       if (r.error) throw r.error;
       return location.origin + location.pathname + '?invite=' + token;
+    },
+    setInvitesEnabled: async (on) => {
+      const r = await client.rpc('set_invites', { p_homespace: homespaceId, p_on: on });
+      if (r.error) { console.warn('[togetherkit] setInvites', r.error.message); throw r.error; }
+      setHomespace(h => (h ? { ...h, invites_enabled: on } : h));
+      return r;
     },
     switchHome: (id) => { if (id && id !== homespaceId) setHomespaceId(id); },
     createHome: async (name) => {

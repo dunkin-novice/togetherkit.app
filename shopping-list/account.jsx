@@ -111,6 +111,7 @@ function AccountSheet({ sx, onClose }) {
 
   const iAmOwner = !!(sx.me && sx.me.isOwner);
   const canRename = !!(sx.me && sx.me.isAdmin); // owner or admin
+  const invitesOn = !(sx.homespace && sx.homespace.invites_enabled === false);
 
   const nameDirty = !!name.trim() && name.trim() !== (sx.me && sx.me.name);
   const saveName = () => { if (!nameDirty) return; sx.actions.setMyName(name.trim()); setNameSaved(true); setTimeout(() => setNameSaved(false), 1800); };
@@ -194,11 +195,26 @@ function AccountSheet({ sx, onClose }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #f0ebe2', paddingTop: 16 }}>
-                <span style={aUpper}>Invite to this space</span>
-                <button onClick={invite} disabled={making} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'var(--partner)', color: '#fff', border: 'none', borderRadius: 13, padding: '13px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  <window.Icons.Share size={16} /> {making ? 'Creating link…' : (navigator.share ? 'Share invite link' : (copied ? 'Link copied!' : 'Copy invite link'))}
-                </button>
-                {inviteUrl && <div style={{ fontSize: 12, fontWeight: 600, color: '#9a9186', wordBreak: 'break-all', background: '#fff', border: '1px solid #ece6db', borderRadius: 10, padding: '9px 11px' }}>{inviteUrl}</div>}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={aUpper}>Invite to this space</span>
+                  {canRename && (
+                    <button onClick={() => sx.actions.setInvitesEnabled(!invitesOn).catch(() => {})} role="switch" aria-checked={invitesOn} title={invitesOn ? 'Turn invite link off' : 'Turn invite link on'} style={{ width: 44, height: 26, borderRadius: 999, background: invitesOn ? 'var(--partner)' : '#ddd5c8', position: 'relative', border: 'none', cursor: 'pointer', flexShrink: 0, transition: 'background .15s', padding: 0 }}>
+                      <span style={{ position: 'absolute', top: 3, left: invitesOn ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .15s', boxShadow: '0 1px 2px rgba(0,0,0,.2)' }} />
+                    </button>
+                  )}
+                </div>
+                {invitesOn ? (
+                  <React.Fragment>
+                    <button onClick={invite} disabled={making} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'var(--partner)', color: '#fff', border: 'none', borderRadius: 13, padding: '13px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <window.Icons.Share size={16} /> {making ? 'Creating link…' : (navigator.share ? 'Share invite link' : (copied ? 'Link copied!' : 'Copy invite link'))}
+                    </button>
+                    {inviteUrl && <div style={{ fontSize: 12, fontWeight: 600, color: '#9a9186', wordBreak: 'break-all', background: '#fff', border: '1px solid #ece6db', borderRadius: 10, padding: '9px 11px' }}>{inviteUrl}</div>}
+                  </React.Fragment>
+                ) : (
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#9a9186', background: '#fff', border: '1px solid #ece6db', borderRadius: 12, padding: '12px 13px', lineHeight: 1.45 }}>
+                    The invite link is <b>off</b> — existing links won’t work either.{canRename ? ' Flip the switch to let new people join.' : ' Ask the owner to turn it on.'}
+                  </div>
+                )}
               </div>
             </React.Fragment>
           ) : (
