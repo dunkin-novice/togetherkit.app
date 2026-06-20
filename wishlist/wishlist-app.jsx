@@ -24,11 +24,26 @@ async function unfurl(url) {
   return null;
 }
 
+// Split a blob of pasted text into clean http(s) URLs (newlines, commas or
+// spaces all work), bare domains get https://, deduped, capped.
+function parseUrls(text) {
+  const raw = (text || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+  const seen = new Set(); const out = [];
+  for (let u of raw) {
+    if (!/^https?:\/\//i.test(u)) { if (/^[\w-]+(\.[\w-]+)+/.test(u)) u = 'https://' + u; else continue; }
+    if (!seen.has(u)) { seen.add(u); out.push(u); }
+  }
+  return out.slice(0, 40);
+}
+function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return 'link'; } }
+async function mapLimit(arr, limit, fn) { let i = 0; const run = async () => { while (i < arr.length) { const idx = i++; await fn(arr[idx], idx); } }; await Promise.all(Array.from({ length: Math.min(limit, arr.length || 1) }, run)); }
+
 function useWishStore(homespaceId, me) {
   const BE = window.TogetherBackend; const { client } = BE;
   const [state, setState] = useState(() => ({
     items: [], syncing: true, statusFilter: 'all', sortMode: 'new',
     addOpen: false, fetching: false,
+    bulkOpen: false, bulkText: '', bulkBusy: 0,
     draft: { url: '', title: '', image: null, price: '', currency: '', site: '', note: '', forWho: '', important: false },
     detailId: null, editing: false, edit: { title: '', price: '', note: '', forWho: '', url: '' },
     bugOpen: false, bugSent: false, bugText: '',
@@ -62,6 +77,25 @@ function useWishStore(homespaceId, me) {
       const w = { id: BE.newId(), url: d.url, title, image: d.image, price: d.price, currency: d.currency, site: d.site, note: d.note, forWho: d.forWho, byUser: m.uid, byName: m.name, date: 'Today', got: false, important: d.important, pos: Date.now() };
       patch(st => ({ items: [w, ...st.items], addOpen: false, draft: { url: '', title: '', image: null, price: '', currency: '', site: '', note: '', forWho: '', important: false } }));
       db(client.from('wishlist').insert(wishToRow(w, homespaceId)));
+    },
+    bulkAdd: async () => {
+      const s = ref.current, m = meRef.current || { uid: null, name: 'Me' };
+      const urls = parseUrls(s.bulkText); if (!urls.length) return;
+      const base = Date.now();
+      const rows = urls.map((url, i) => ({ id: BE.newId(), url, title: hostOf(url), image: null, price: '', currency: '', site: hostOf(url), note: '', forWho: '', byUser: m.uid, byName: m.name, date: 'Today', got: false, important: false, pos: base - i }));
+      // 1) insert all immediately (fill now) so they show right away
+      patch(st => ({ items: [...rows, ...st.items], bulkOpen: false, bulkText: '', bulkBusy: rows.length }));
+      db(client.from('wishlist').insert(rows.map(w => wishToRow(w, homespaceId))));
+      // 2) enrich each in the background (fill later) — patch title/image/price as they land
+      await mapLimit(rows, 4, async (w) => {
+        const d = await unfurl(w.url);
+        if (d && (d.title || d.image || d.price)) {
+          const upd = { title: (d.title || w.title), image: d.image || null, price: d.price || '', currency: d.currency || '', site: d.site || w.site };
+          patch(st => ({ items: st.items.map(x => x.id === w.id ? { ...x, ...upd } : x) }));
+          db(client.from('wishlist').update({ title: upd.title, image: upd.image || null, price: upd.price || null, currency: upd.currency || null, site: upd.site || null, updated_at: new Date().toISOString() }).eq('id', w.id));
+        }
+        patch(st => ({ bulkBusy: Math.max(0, st.bulkBusy - 1) }));
+      });
     },
     remove: (id) => { patch(s => ({ items: s.items.filter(i => i.id !== id) })); db(client.from('wishlist').delete().eq('id', id)); },
     toggleGot: (id) => { const it = ref.current.items.find(x => x.id === id); if (!it) return; patch(s => ({ items: s.items.map(x => x.id === id ? { ...x, got: !x.got } : x) })); db(client.from('wishlist').update({ got: !it.got, updated_at: new Date().toISOString() }).eq('id', id)); },
@@ -161,6 +195,26 @@ function AddModal({ v, primary }) {
   );
 }
 
+function BulkModal({ v, primary }) {
+  if (!v.s.bulkOpen) return null;
+  const urls = parseUrls(v.s.bulkText);
+  const ph = 'Paste links — one per line (or comma-separated)\n\nhttps://www.amazon.com/...\nhttps://shopee.co.th/...\nhttps://www.lazada.co.th/...';
+  return (
+    <Overlay onClose={() => v.a.set({ bulkOpen: false })}>
+      <Sheet stop={v.stop} maxWidth={400}>
+        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Bulk add links</h2><button onClick={() => v.a.set({ bulkOpen: false })} style={closeX}>×</button></div>
+        <div style={{ padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <textarea value={v.s.bulkText} onChange={(e) => v.a.set({ bulkText: e.target.value })} placeholder={ph} autoFocus style={{ width: '100%', minHeight: 168, resize: 'vertical', border: '1px solid #ece6db', background: '#fff', borderRadius: 14, padding: '13px 14px', fontSize: 13.5, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.6 }} />
+          <p style={{ margin: '0 2px', fontSize: 11.5, color: '#b3a99c', fontWeight: 600 }}>We add them now and pull the photo/title/price for each in the background — whatever the shop allows. Edit anything later.</p>
+        </div>
+        <div style={{ padding: '14px 22px 22px', display: 'flex', gap: 10 }}>
+          <button onClick={() => v.a.set({ bulkOpen: false })} style={cancelBtn}>Cancel</button>
+          <button onClick={v.a.bulkAdd} disabled={!urls.length} style={{ flex: 2, background: urls.length ? primary : '#d9cfc0', color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: urls.length ? 'pointer' : 'default', fontFamily: 'inherit' }}>{urls.length ? ('Add ' + urls.length + ' item' + (urls.length === 1 ? '' : 's')) : 'Add'}</button>
+        </div>
+      </Sheet>
+    </Overlay>
+  );
+}
 function DetailModal({ v, primary, partner }) {
   const w = v.detail; if (!w) return null;
   const editing = v.s.editing, e = v.s.edit;
@@ -247,17 +301,18 @@ function Brand({ titleSize, subSize, dot }) {
 }
 function useIsDesktop(bp = 720) { const get = () => typeof window !== 'undefined' && window.innerWidth >= bp; const [d, setD] = useState(get); useEffect(() => { const on = () => setD(get()); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []); return d; }
 function Board({ v, isDesktop, primary, partner }) {
-  const addBtn = isDesktop ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: '12px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' } : { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 15, padding: 14, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' };
+  const addBtn = isDesktop ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: '12px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' } : { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 15, padding: 14, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' };
+  const bulkBtn = isDesktop ? { display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 14, padding: '12px 18px', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' } : { flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 15, padding: '14px 18px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
   return (
     <div style={{ padding: isDesktop ? '38px 44px 46px' : '28px 18px 40px', display: 'flex', flexDirection: 'column', gap: isDesktop ? 22 : 18 }}>
       {isDesktop ? (
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} /><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><WI.Plus size={17} />Add</button></div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} /><div style={{ display: 'flex', gap: 9 }}><button onClick={() => v.a.set({ bulkOpen: true, bulkText: '' })} style={bulkBtn}>Bulk</button><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><WI.Plus size={17} />Add</button></div></div>
       ) : (
-        <Fragment><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} /></div><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><WI.Plus size={16} />Add to wishlist</button></Fragment>
+        <Fragment><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} /></div><div style={{ display: 'flex', gap: 9 }}><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><WI.Plus size={16} />Add</button><button onClick={() => v.a.set({ bulkOpen: true, bulkText: '' })} style={bulkBtn}>Bulk</button></div></Fragment>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>{v.statusFilters.map(s => (<button key={s.id} onClick={s.select} style={s.chipStyle}>{s.star && <WI.Star size={13} filled color="currentColor" />}{s.name}<span style={s.countStyle}>{s.count}</span></button>))}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-        <span style={upper}>{v.count} item{v.count === 1 ? '' : 's'}</span>
+        <span style={upper}>{v.count} item{v.count === 1 ? '' : 's'}{v.s.bulkBusy > 0 ? ' · fetching ' + v.s.bulkBusy + '…' : ''}</span>
         <div style={{ position: 'relative' }}><select value={v.sortMode} onChange={v.setSortMode} style={{ background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 22px 5px 9px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>{v.sortOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select><span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><WI.Chevron size={12} /></span></div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12 }}>
@@ -294,7 +349,7 @@ function BoardShell({ sx }) {
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
       <button onClick={() => v.a.set({ bugOpen: true, bugSent: false })} title="Report a problem" style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}><WI.Bug size={21} /></button>
-      <AddModal v={v} primary={primary} /><DetailModal v={v} primary={primary} partner={partner} /><BugModal v={v} primary={primary} />
+      <AddModal v={v} primary={primary} /><BulkModal v={v} primary={primary} /><DetailModal v={v} primary={primary} partner={partner} /><BugModal v={v} primary={primary} />
       <TweaksPanel title="Tweaks"><TweakSection label="People"><TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)} options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} /><TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)} options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} /></TweakSection></TweaksPanel>
     </div>
   );
