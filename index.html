@@ -98,6 +98,7 @@
 
   <!-- shared modules (reused from shopping-list/): icon set, auth client, session/homespace, account UI -->
   <script type="text/babel" src="shopping-list/icons.jsx"></script>
+  <script type="text/babel" src="shopping-list/reorder.jsx"></script>
   <script type="text/babel" src="shopping-list/supabase.jsx"></script>
   <script type="text/babel" src="shopping-list/session.jsx"></script>
   <script type="text/babel" src="shopping-list/account.jsx"></script>
@@ -115,23 +116,15 @@
     const [dx, setDx] = React.useState(0);
     const [dragging, setDragging] = React.useState(false);
     const st = React.useRef(null); const dxRef = React.useRef(0); const movedRef = React.useRef(false);
-    const holdRef = React.useRef(null); const heldRef = React.useRef(false);
-    const clearHold = () => { if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null; } };
     const apply = (n) => { dxRef.current = n; setDx(n); };
-    const down = (e) => {
-      if (e.target.closest('button')) return;
-      st.current = { x: e.clientX, y: e.clientY, base: dxRef.current, active: false }; movedRef.current = false; heldRef.current = false;
-      clearHold();
-      holdRef.current = setTimeout(() => { holdRef.current = null; heldRef.current = true; apply(0); if (onHold) onHold(); }, 480);
-    };
+    const down = (e) => { if (e.target.closest('button')) return; st.current = { x: e.clientX, y: e.clientY, base: dxRef.current, active: false }; movedRef.current = false; };
     const move = (e) => {
       if (!st.current) return;
       const dX = e.clientX - st.current.x, dY = e.clientY - st.current.y;
-      if (Math.abs(dX) > 8 || Math.abs(dY) > 8) clearHold();
       if (!st.current.active) { if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} } else if (Math.abs(dY) > 10) { st.current = null; return; } }
       if (st.current.active) { const n = Math.max(-TRAY, Math.min(0, st.current.base + dX)); apply(n); if (Math.abs(n - st.current.base) > 6) movedRef.current = true; }
     };
-    const up = () => { clearHold(); if (!st.current) { setDragging(false); return; } const a = st.current.active; st.current = null; setDragging(false); if (!a) return; apply(dxRef.current < -TRAY / 2 ? -TRAY : 0); };
+    const up = () => { if (!st.current) { setDragging(false); return; } const a = st.current.active; st.current = null; setDragging(false); if (!a) return; apply(dxRef.current < -TRAY / 2 ? -TRAY : 0); };
     const close = () => apply(0);
     const trayBtn = { width: 46, height: 46, borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' };
     return (
@@ -144,12 +137,12 @@
         </div>
         <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
           onContextMenu={(e) => e.preventDefault()}
-          onClickCapture={(e) => { if (movedRef.current || dxRef.current !== 0 || heldRef.current) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; heldRef.current = false; if (dxRef.current !== 0) apply(0); } }}
+          onClickCapture={(e) => { if (movedRef.current || dxRef.current !== 0) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; if (dxRef.current !== 0) apply(0); } }}
           style={{ position: 'relative', transform: 'translateX(' + dx + 'px)', transition: dragging ? 'none' : 'transform .2s cubic-bezier(.3,.7,.4,1)', touchAction: 'pan-y' }}>
           <a className="feature" href={'./list/?id=' + encodeURIComponent(list.id)} style={{ marginBottom: 0 }}>
             <span className="ic" style={{ fontSize: 22, lineHeight: 1, overflow: 'hidden', padding: 0 }}>{list.icon_image ? <img src={list.icon_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (list.emoji || '📋')}</span>
-            <span><div className="title">{list.pinned && !list.archived ? '📌 ' : ''}{list.name}</div><div className="desc">Your custom shared list.</div></span>
-            <span className="arrow">›</span>
+            <span><div className="title">{list.pinned && !list.archived ? '📌 ' : ''}{list.name}</div><div className="desc">Hold to reorder · ⋯ for options</div></span>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onHold && onHold(); }} title="Options" style={{ marginLeft: 'auto', border: 'none', background: 'none', color: '#c3bbae', cursor: 'pointer', padding: '4px 6px', fontSize: 20, lineHeight: 1, fontWeight: 800 }}>⋯</button>
           </a>
         </div>
       </div>
@@ -161,6 +154,7 @@
     { key: 'dates', href: './date-ideas/', title: 'Date Ideas', desc: 'Dates, trips & activities — save them, then schedule together.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 7.6 3 4.5 6.2 4.5c1.9 0 3.2 1 3.8 2.3.6-1.3 1.9-2.3 3.8-2.3 3.2 0 4.9 3.1 3.4 6.5C19 15.4 12 20 12 20z"/></svg> },
     { key: 'notes', href: './notes/', title: 'Shared Notes', desc: 'Jot anything down together — labels, important, in sync.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg> },
     { key: 'wishlist', href: './wishlist/', title: 'Wishlist', desc: 'Save things you want from any shop — paste a link.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 7.6 3 4.5 6.2 4.5c1.9 0 3.2 1 3.8 2.3.6-1.3 1.9-2.3 3.8-2.3 3.2 0 4.9 3.1 3.4 6.5C19 15.4 12 20 12 20z"/></svg> },
+    { key: 'fitness', href: './fitness/', title: 'Shared Fitness', desc: 'Track lifts & body stats together, with graphs.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8v8M8 6v12M16 6v12M20 8v8M8 12h8"/></svg> },
   ];
 
   // A pre-built feature card with swipe-left → Remove (hide it from the hub;
@@ -282,6 +276,12 @@
     const activeLists = lists.filter(l => !l.archived).sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (a.pos - b.pos));
     const archivedLists = lists.filter(l => l.archived);
 
+    const commitListOrder = (ids) => {
+      setLists(ls => ls.map(l => { const i = ids.indexOf(l.id); return i >= 0 ? { ...l, pos: i + 1 } : l; }));
+      ids.forEach((id, i) => BE.client.from('custom_lists').update({ pos: i + 1 }).eq('id', id).then(({ error }) => { if (error) console.warn('reorder', error.message); }));
+    };
+    const { order: listOrder, dragId: listDragId, bind: listBind } = window.TogetherReorder.useReorder(activeLists.map(l => l.id), commitListOrder);
+
     const renameSave = async ({ name, emoji, iconImage }) => {
       const r = await BE.client.from('custom_lists').update({ name, emoji, icon_image: iconImage || null }).eq('id', editList.id);
       if (r.error) console.warn('rename list', r.error.message);
@@ -329,9 +329,11 @@
               <PrebuiltSwipeCard key={p.key} feat={p} onRemove={() => hideFeature(p.key)} />
             ))}
 
-            {activeLists.map(l => (
-              <HubSwipeCard key={l.id} list={l} onHold={() => setMenuList(l)} onPin={() => pinList(l)} onArchive={() => archiveList(l)} onDelete={() => deleteList(l)} />
-            ))}
+            {listOrder.map(id => { const l = activeLists.find(x => x.id === id); if (!l) return null; return (
+              <div key={id} {...listBind(id)}>
+                <HubSwipeCard list={l} onHold={() => setMenuList(l)} onPin={() => pinList(l)} onArchive={() => archiveList(l)} onDelete={() => deleteList(l)} />
+              </div>
+            ); })}
 
             <button className="feature" onClick={() => setTemplatesOpen(true)} style={{ cursor: 'pointer', textAlign: 'left', border: '1px dashed #d9cbb7', background: 'transparent', font: 'inherit', width: '100%' }}>
               <span className="ic" style={{ background: '#efe9e0', color: '#a8794f', fontSize: 24, lineHeight: 1 }}>+</span>

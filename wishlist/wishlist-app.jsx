@@ -100,6 +100,7 @@ function useWishStore(homespaceId, me) {
     remove: (id) => { patch(s => ({ items: s.items.filter(i => i.id !== id) })); db(client.from('wishlist').delete().eq('id', id)); },
     toggleGot: (id) => { const it = ref.current.items.find(x => x.id === id); if (!it) return; patch(s => ({ items: s.items.map(x => x.id === id ? { ...x, got: !x.got } : x) })); db(client.from('wishlist').update({ got: !it.got, updated_at: new Date().toISOString() }).eq('id', id)); },
     toggleImportant: (id) => { const it = ref.current.items.find(x => x.id === id); if (!it) return; patch(s => ({ items: s.items.map(x => x.id === id ? { ...x, important: !x.important } : x) })); db(client.from('wishlist').update({ important: !it.important, updated_at: new Date().toISOString() }).eq('id', id)); },
+    reorder: (ids) => { const base = Date.now(); patch(s => ({ items: s.items.map(it => { const i = ids.indexOf(it.id); return i >= 0 ? { ...it, pos: base - i } : it; }) })); ids.forEach((id, i) => db(client.from('wishlist').update({ pos: base - i }).eq('id', id))); },
     startEdit: () => { const it = ref.current.items.find(x => x.id === ref.current.detailId); if (!it) return; patch({ editing: true, edit: { title: it.title, price: it.price, note: it.note, forWho: it.forWho, url: it.url } }); },
     duplicateItem: () => { const it = ref.current.items.find(x => x.id === ref.current.detailId); if (!it) return; patch({ detailId: null, editing: false, addOpen: true, draft: { url: it.url || '', title: it.title || '', image: it.image || null, price: it.price || '', currency: it.currency || '', site: it.site || '', note: it.note || '', forWho: it.forWho || '', important: it.important } }); },
     setEdit: (p) => patch(s => ({ edit: { ...s.edit, ...p } })),
@@ -302,6 +303,7 @@ function Brand({ titleSize, subSize, dot }) {
 }
 function useIsDesktop(bp = 720) { const get = () => typeof window !== 'undefined' && window.innerWidth >= bp; const [d, setD] = useState(get); useEffect(() => { const on = () => setD(get()); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []); return d; }
 function Board({ v, isDesktop, primary, partner }) {
+  const { order: wOrder, bind: wBind } = window.TogetherReorder.useReorder(v.items.map(i => i.id), v.a.reorder, { enabled: v.sortMode === 'new' });
   const addBtn = isDesktop ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: '12px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' } : { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 15, padding: 14, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' };
   const bulkBtn = isDesktop ? { display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 14, padding: '12px 18px', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' } : { flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 15, padding: '14px 18px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
   return (
@@ -317,7 +319,7 @@ function Board({ v, isDesktop, primary, partner }) {
         <div style={{ position: 'relative' }}><select value={v.sortMode} onChange={v.setSortMode} style={{ background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 22px 5px 9px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>{v.sortOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select><span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><WI.Chevron size={12} /></span></div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12 }}>
-        {v.items.map(w => (<WSwipeRow key={w.id} onDelete={w.deleteSelf} onComplete={w.gotSelf} completeLabel={w.got ? 'Undo' : 'Got it'}><WishCard w={w} partner={partner} /></WSwipeRow>))}
+        {wOrder.map(id => { const w = v.items.find(x => x.id === id); if (!w) return null; return (<div key={id} {...wBind(id)}><WSwipeRow onDelete={w.deleteSelf} onComplete={w.gotSelf} completeLabel={w.got ? 'Undo' : 'Got it'}><WishCard w={w} partner={partner} /></WSwipeRow></div>); })}
       </div>
       {v.s.syncing ? <div style={{ textAlign: 'center', padding: '40px', color: '#b3a99c', fontWeight: 600 }}>Syncing…</div> : (v.isEmpty && <div style={{ textAlign: 'center', padding: '40px 20px', color: '#b3a99c', fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>{v.emptyText}</div>)}
     </div>

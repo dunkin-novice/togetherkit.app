@@ -70,6 +70,7 @@ function useNotesStore(homespaceId, me) {
     set: patch,
     remove: (id) => { patch(s => ({ notes: s.notes.filter(n => n.id !== id) })); db(client.from('notes').delete().eq('id', id)); },
     toggleImportant: (id) => { const n = ref.current.notes.find(x => x.id === id); if (!n) return; patch(s => ({ notes: s.notes.map(x => x.id === id ? { ...x, important: !x.important } : x) })); db(client.from('notes').update({ important: !n.important, updated_at: new Date().toISOString() }).eq('id', id)); },
+    reorder: (ids) => { const base = Date.now(); patch(s => ({ notes: s.notes.map(n => { const i = ids.indexOf(n.id); return i >= 0 ? { ...n, pos: base - i } : n; }) })); ids.forEach((id, i) => db(client.from('notes').update({ pos: base - i }).eq('id', id))); },
     setDraft: (p) => patch(s => ({ draft: { ...s.draft, ...p } })),
     addNote: () => {
       const s = ref.current, d = s.draft, m = meRef.current || { uid: null, name: 'Me' };
@@ -457,6 +458,7 @@ function FilterGroup({ label, kind, v, open, onToggle, summary }) {
   );
 }
 function Board({ v, isDesktop, primary, partner }) {
+  const { order: noteOrder, dragId: noteDragId, bind: noteBind } = window.TogetherReorder.useReorder(v.notes.map(n => n.id), v.a.reorder, { enabled: v.sortMode === 'new' });
   const [open, setOpen] = useState(() => { try { return { labels: true, status: true, ...(JSON.parse(localStorage.getItem(NFILT_KEY)) || {}) }; } catch (e) { return { labels: true, status: true }; } });
   const toggle = (k) => setOpen(s => { const n = { ...s, [k]: !s[k] }; try { localStorage.setItem(NFILT_KEY, JSON.stringify(n)); } catch (e) {} return n; });
   const labSummary = (v.labelFilters.find(x => x.id === v.s.activeFilter) || {}).name || '';
@@ -539,11 +541,13 @@ function Board({ v, isDesktop, primary, partner }) {
         </button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12 }}>
-        {v.notes.map(note => (
-          <NSwipeRow key={note.id} onDelete={note.deleteSelf} onComplete={note.starSelf} completeLabel={note.important ? 'Unstar' : 'Important'}>
-            <NoteCard note={note} />
-          </NSwipeRow>
-        ))}
+        {noteOrder.map(id => { const note = v.notes.find(n => n.id === id); if (!note) return null; return (
+          <div key={id} {...noteBind(id)}>
+            <NSwipeRow onDelete={note.deleteSelf} onComplete={note.starSelf} completeLabel={note.important ? 'Unstar' : 'Important'}>
+              <NoteCard note={note} />
+            </NSwipeRow>
+          </div>
+        ); })}
       </div>
       {v.s.syncing ? <EmptyState text="Syncing…" pad="40px 20px" /> : (v.isEmpty && <EmptyState text={v.emptyText} pad="40px 20px" />)}
       {exportOpen && <ExportSheet onClose={() => setExportOpen(false)} />}
