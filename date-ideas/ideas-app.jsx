@@ -685,7 +685,7 @@ function ScheduleModal({ v, primary, partner }) {
           )}
           <button onClick={() => v.a.set({ schedInvite: !s.schedInvite })} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#fff', border: '1px solid ' + (s.schedInvite ? '#cfe0cf' : '#ece6db'), borderRadius: 14, padding: '13px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 13.5, fontWeight: 800, color: '#3a352f' }}>Invite both of us</span>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: '#3a352f' }}>Invite everyone</span>
               <span style={{ display: 'flex', gap: 14 }}>{members.slice(0, 2).map(m => <InviteAvatar key={m.uid} m={m} />)}</span>
             </span>
             <span style={{ width: 44, height: 26, borderRadius: 999, background: s.schedInvite ? partner : '#ddd5c8', position: 'relative', flexShrink: 0, transition: 'background .15s' }}>
@@ -695,7 +695,7 @@ function ScheduleModal({ v, primary, partner }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>Note <span style={{ color: '#c3b29a' }}>· optional</span></span><textarea value={s.schedNote} onChange={(e) => v.a.set({ schedNote: e.target.value })} placeholder="Anything to remember…" style={{ width: '100%', minHeight: 64, resize: 'vertical', border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '11px 13px', fontSize: 14, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.5 }} /></div>
           <p style={{ margin: 0, fontSize: 12.5, color: '#9a9186', fontWeight: 600, lineHeight: 1.5, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <span style={{ flexShrink: 0, marginTop: 1, display: 'flex' }}><DIcons.Heart size={15} color={partner} /></span>
-            Saves the date and opens Google Calendar — prefilled with the place and your partner invited. Just tap Save.
+            Saves the date and opens Google Calendar — prefilled with the place and everyone invited. Just tap Save.
           </p>
         </div>
         <div style={{ padding: '16px 22px 22px', display: 'flex', gap: 10 }}>
@@ -834,7 +834,7 @@ function buildView(state, actions, opts) {
     // all scheduled ideas (ignores list filters) — for the calendar view
     scheduledList: state.ideas.filter(i => i.scheduled && i.schedAt).map(decorate),
     isEmpty: vis.length === 0,
-    emptyText: (af === 'all' && sf === 'all') ? 'No ideas yet. Add the first thing you two want to do.' : 'Nothing matches these filters.',
+    emptyText: (af === 'all' && sf === 'all') ? 'No ideas yet. Add the first thing you want to do together.' : 'Nothing matches these filters.',
     listHeading, planLabel: ideaCount + ' to plan',
     sortMode, sortOptions: [{ id: 'smart', name: 'Smart order' }, { id: 'az', name: 'Name A–Z' }, { id: 'new', name: 'Newest' }],
     setSortMode: (e) => actions.set({ sortMode: e.target.value }),
