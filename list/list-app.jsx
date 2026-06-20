@@ -266,15 +266,15 @@ function buildView(state, actions, opts) {
 }
 
 /* ── board + shell ────────────────────────────────────────────────────────── */
-function Brand({ titleSize, subSize, dot, primary, partner, subtitle }) {
-  return (<a href="../" title="Back to Together" style={{ display: 'flex', flexDirection: 'column', gap: 5, textDecoration: 'none', color: 'inherit' }}><div style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}><CI.Logo size={dot} /></div><h1 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: titleSize, fontWeight: 700, margin: 0, color: '#3a352f', letterSpacing: '.3px' }}>{subtitle || 'Together'}</h1><p style={{ margin: 0, fontSize: subSize, color: '#9a9186', fontWeight: 600 }}>Shared list · Together</p></a>);
+function Brand({ titleSize, subSize, dot, primary, partner, subtitle, iconImage }) {
+  return (<a href="../" title="Back to Together" style={{ display: 'flex', flexDirection: 'column', gap: 5, textDecoration: 'none', color: 'inherit' }}><div style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}><CI.Logo size={dot} /></div><h1 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: titleSize, fontWeight: 700, margin: 0, color: '#3a352f', letterSpacing: '.3px', display: 'flex', alignItems: 'center', gap: 9 }}>{iconImage && <img src={iconImage} alt="" style={{ width: Math.round(titleSize * 0.92), height: Math.round(titleSize * 0.92), borderRadius: 10, objectFit: 'cover' }} />}{subtitle || 'Together'}</h1><p style={{ margin: 0, fontSize: subSize, color: '#9a9186', fontWeight: 600 }}>Shared list · Together</p></a>);
 }
 function EmptyState({ text, pad }) { return <div style={{ textAlign: 'center', padding: pad, color: '#b3a99c', fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>{text}</div>; }
 const CFILT_KEY = 'togetherkit.list.filterui.' + LIST_ID;
 function FilterGroup({ label, kind, v, open, onToggle, summary }) {
   return (<div><button onClick={onToggle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: '3px 2px', cursor: 'pointer', fontFamily: 'inherit' }}><span style={upper}>{label}</span><span style={{ display: 'flex', alignItems: 'center', gap: 9, color: '#bcb3a6' }}>{!open && summary && <span style={{ fontSize: 12, fontWeight: 800, color: '#857c70', background: '#fff', border: '1px solid #ece6db', padding: '3px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>{summary}</span>}<CI.Chevron size={16} open={open} /></span></button>{open && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 9 }}>{kind === 'labels' ? <LabelFilters v={v} /> : <StatusFilters v={v} />}</div>}</div>);
 }
-function Board({ v, isDesktop, primary, partner, listName }) {
+function Board({ v, isDesktop, primary, partner, listName, iconImg }) {
   const [open, setOpen] = useState(() => { try { return { labels: true, status: true, ...(JSON.parse(localStorage.getItem(CFILT_KEY)) || {}) }; } catch (e) { return { labels: true, status: true }; } });
   const toggle = (k) => setOpen(s => { const n = { ...s, [k]: !s[k] }; try { localStorage.setItem(CFILT_KEY, JSON.stringify(n)); } catch (e) {} return n; });
   const labS = (v.labelFilters.find(x => x.id === v.s.activeFilter) || {}).name || '';
@@ -303,9 +303,9 @@ function Board({ v, isDesktop, primary, partner, listName }) {
   return (
     <div style={{ padding: isDesktop ? '38px 44px 46px' : '28px 18px 40px', display: 'flex', flexDirection: 'column', gap: isDesktop ? 22 : 18 }}>
       {isDesktop ? (
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} primary={primary} partner={partner} subtitle={listName} /><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><CI.Plus size={17} />Add</button></div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} primary={primary} partner={partner} subtitle={listName} iconImage={iconImg} /><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><CI.Plus size={17} />Add</button></div>
       ) : (
-        <Fragment><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} primary={primary} partner={partner} subtitle={listName} /></div><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><CI.Plus size={16} />Add</button></Fragment>
+        <Fragment><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} primary={primary} partner={partner} subtitle={listName} iconImage={iconImg} /></div><button onClick={() => v.a.set({ addOpen: true })} style={addBtn}><CI.Plus size={16} />Add</button></Fragment>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 14 : 13 }}><FilterGroup label="Labels" kind="labels" v={v} open={open.labels} onToggle={() => toggle('labels')} summary={labS} /><FilterGroup label="Status" kind="status" v={v} open={open.status} onToggle={() => toggle('status')} summary={statS} />{v.labelsOpen && <LabelsPanel v={v} partner={partner} maxWidth={isDesktop ? 560 : undefined} />}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 4px', gap: 10 }}><span style={{ fontSize: 12, fontWeight: 800, color: '#857c70', letterSpacing: '.6px', textTransform: 'uppercase' }}>{v.todoLabel}</span><div style={{ position: 'relative' }}><select value={v.sortMode} onChange={v.setSortMode} style={{ background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 22px 5px 9px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>{v.sortOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select><span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><CI.Chevron size={12} /></span></div></div>
@@ -342,16 +342,17 @@ function BoardShell({ sx }) {
   useEffect(() => { document.documentElement.style.setProperty('--primary', primary); document.documentElement.style.setProperty('--partner', partner); }, [primary, partner]);
   useEffect(() => {
     let alive = true;
-    window.TogetherBackend.client.from('custom_lists').select('id,name,emoji').eq('id', LIST_ID).maybeSingle().then(({ data }) => { if (!alive) return; if (data) { setListMeta(data); document.title = 'Together — ' + data.name; } else setNotFound(true); });
+    window.TogetherBackend.client.from('custom_lists').select('id,name,emoji,icon_image').eq('id', LIST_ID).maybeSingle().then(({ data }) => { if (!alive) return; if (data) { setListMeta(data); document.title = 'Together — ' + data.name; } else setNotFound(true); });
     return () => { alive = false; };
   }, [sx.homespaceId]);
   const [state, actions] = useListStore(sx.homespaceId, sx.me);
   const v = buildView(state, actions, { primary, partner, members: sx.members });
   if (notFound) return <div className="app"><div className="app-shell"><div style={{ padding: '60px 28px', textAlign: 'center' }}><h2 style={{ fontFamily: "'Quicksand',sans-serif", color: '#3a352f' }}>List not found</h2><a href="../" style={{ color: '#a8794f', fontWeight: 800 }}>← Back to Together</a></div></div></div>;
-  const listName = listMeta ? ((listMeta.emoji ? listMeta.emoji + ' ' : '') + listMeta.name) : 'List';
+  const iconImg = listMeta && listMeta.icon_image;
+  const listName = listMeta ? ((!iconImg && listMeta.emoji ? listMeta.emoji + ' ' : '') + listMeta.name) : 'List';
   return (
     <div className="app">
-      <div className="app-shell"><Board v={v} isDesktop={isDesktop} primary={primary} partner={partner} listName={listName} /></div>
+      <div className="app-shell"><Board v={v} isDesktop={isDesktop} primary={primary} partner={partner} listName={listName} iconImg={iconImg} /></div>
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}

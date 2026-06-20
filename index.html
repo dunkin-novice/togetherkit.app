@@ -107,6 +107,46 @@
   // session → show the sign-in screen → set up the homespace → show the launcher.
   // Signing in here means you arrive at either app already logged in.
   const EMOJIS = ['📋','🎬','🎁','🍿','✈️','🏠','💪','📚','🎵','🌱','💡','❤️','🐾','🍳','🧳','🎉'];
+
+  // A custom-list card with swipe-left to reveal Pin / Archive / Delete (or
+  // Unarchive / Delete for archived lists). Tap the card to open the list.
+  function HubSwipeCard({ list, onPin, onArchive, onUnarchive, onDelete }) {
+    const TRAY = list.archived ? 124 : 168;
+    const [dx, setDx] = React.useState(0);
+    const [dragging, setDragging] = React.useState(false);
+    const st = React.useRef(null); const dxRef = React.useRef(0); const movedRef = React.useRef(false);
+    const apply = (n) => { dxRef.current = n; setDx(n); };
+    const down = (e) => { if (e.target.closest('button')) return; st.current = { x: e.clientX, y: e.clientY, base: dxRef.current, active: false }; movedRef.current = false; };
+    const move = (e) => {
+      if (!st.current) return;
+      const dX = e.clientX - st.current.x, dY = e.clientY - st.current.y;
+      if (!st.current.active) { if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} } else if (Math.abs(dY) > 10) { st.current = null; return; } }
+      if (st.current.active) { const n = Math.max(-TRAY, Math.min(0, st.current.base + dX)); apply(n); if (Math.abs(n - st.current.base) > 6) movedRef.current = true; }
+    };
+    const up = () => { if (!st.current) { setDragging(false); return; } const a = st.current.active; st.current = null; setDragging(false); if (!a) return; apply(dxRef.current < -TRAY / 2 ? -TRAY : 0); };
+    const close = () => apply(0);
+    const trayBtn = { width: 46, height: 46, borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' };
+    return (
+      <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
+        <div aria-hidden={dx === 0} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, paddingLeft: 12 }}>
+          {!list.archived && <button onClick={() => { close(); onPin(); }} title={list.pinned ? 'Unpin' : 'Pin'} style={{ ...trayBtn, background: '#d6a43b' }}><window.Icons.Star size={20} filled color="#fff" /></button>}
+          {!list.archived && <button onClick={() => { close(); onArchive(); }} title="Archive" style={{ ...trayBtn, background: '#8a9b6e' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg></button>}
+          {list.archived && <button onClick={() => { close(); onUnarchive(); }} title="Unarchive" style={{ ...trayBtn, background: '#8a9b6e' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l9-5 9 5M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M9 13h6"/></svg></button>}
+          <button onClick={() => { close(); onDelete(); }} title="Delete" style={{ ...trayBtn, background: '#c4604c' }}><window.Icons.Trash size={20} color="#fff" /></button>
+        </div>
+        <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+          onClickCapture={(e) => { if (movedRef.current || dxRef.current !== 0) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; if (dxRef.current !== 0) apply(0); } }}
+          style={{ position: 'relative', transform: 'translateX(' + dx + 'px)', transition: dragging ? 'none' : 'transform .2s cubic-bezier(.3,.7,.4,1)', touchAction: 'pan-y' }}>
+          <a className="feature" href={'./list/?id=' + encodeURIComponent(list.id)} style={{ marginBottom: 0 }}>
+            <span className="ic" style={{ fontSize: 22, lineHeight: 1, overflow: 'hidden', padding: 0 }}>{list.icon_image ? <img src={list.icon_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (list.emoji || '📋')}</span>
+            <span><div className="title">{list.pinned && !list.archived ? '📌 ' : ''}{list.name}</div><div className="desc">Your custom shared list.</div></span>
+            <span className="arrow">›</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   function Hub({ sx }) {
     const { AccountButton, AccountSheet, HomeButton } = window.TogetherAccount;
     const BE = window.TogetherBackend;
@@ -115,13 +155,21 @@
     const [buildOpen, setBuildOpen] = React.useState(false);
     const [newName, setNewName] = React.useState('');
     const [newEmoji, setNewEmoji] = React.useState('📋');
+    const [iconImage, setIconImage] = React.useState(null);
     const [creating, setCreating] = React.useState(false);
+    const onIconFile = (e) => {
+      const file = e.target.files && e.target.files[0]; if (!file) return;
+      const r = new FileReader();
+      r.onload = () => { const img = new Image(); img.onload = () => { const S = 96, c = document.createElement('canvas'); c.width = S; c.height = S; const ctx = c.getContext('2d'); const ratio = Math.max(S / img.width, S / img.height), w = img.width * ratio, h = img.height * ratio; ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h); setIconImage(c.toDataURL('image/jpeg', 0.82)); }; img.src = r.result; };
+      r.readAsDataURL(file);
+    };
+    const [archivedOpen, setArchivedOpen] = React.useState(false);
     const [bug, setBug] = React.useState({ open: false, sent: false, text: '' });
 
     React.useEffect(() => {
       if (!sx.homespaceId) return;
       let alive = true;
-      const load = () => BE.client.from('custom_lists').select('id,name,emoji,pos').eq('homespace_id', sx.homespaceId).order('pos', { ascending: true }).then(({ data }) => { if (alive) setLists(data || []); });
+      const load = () => BE.client.from('custom_lists').select('id,name,emoji,icon_image,pinned,archived,pos').eq('homespace_id', sx.homespaceId).order('pos', { ascending: true }).then(({ data }) => { if (alive) setLists(data || []); });
       load();
       const ch = BE.client.channel('hublists:' + sx.homespaceId).on('postgres_changes', { event: '*', schema: 'public', table: 'custom_lists', filter: 'homespace_id=eq.' + sx.homespaceId }, load).subscribe();
       return () => { alive = false; BE.client.removeChannel(ch); };
@@ -131,11 +179,24 @@
       const name = newName.trim(); if (!name) return;
       setCreating(true);
       const id = BE.newId();
-      const r = await BE.client.from('custom_lists').insert({ id, homespace_id: sx.homespaceId, name, emoji: newEmoji, created_by: sx.me && sx.me.uid, pos: Date.now() });
+      const r = await BE.client.from('custom_lists').insert({ id, homespace_id: sx.homespaceId, name, emoji: newEmoji, icon_image: iconImage || null, created_by: sx.me && sx.me.uid, pos: Date.now() });
       setCreating(false);
       if (r.error) { console.warn('create list failed', r.error.message); return; }
       location.href = './list/?id=' + encodeURIComponent(id);
     };
+
+    const updList = (id, p) => BE.client.from('custom_lists').update(p).eq('id', id).then(({ error }) => { if (error) console.warn('list update', error.message); });
+    const pinList = (l) => updList(l.id, { pinned: !l.pinned });
+    const archiveList = (l) => updList(l.id, { archived: true });
+    const unarchiveList = (l) => updList(l.id, { archived: false });
+    const deleteList = async (l) => {
+      if (!window.confirm('Delete "' + l.name + '" and everything in it?')) return;
+      await BE.client.from('custom_items').delete().eq('list_id', l.id);
+      await BE.client.from('custom_labels').delete().eq('list_id', l.id);
+      await BE.client.from('custom_lists').delete().eq('id', l.id);
+    };
+    const activeLists = lists.filter(l => !l.archived).sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (a.pos - b.pos));
+    const archivedLists = lists.filter(l => l.archived);
 
     return (
       <React.Fragment>
@@ -162,20 +223,30 @@
               <span className="arrow">›</span>
             </a>
 
-            {lists.map(l => (
-              <a key={l.id} className="feature" href={'./list/?id=' + encodeURIComponent(l.id)}>
-                <span className="ic" style={{ fontSize: 22, lineHeight: 1 }}>{l.emoji || '📋'}</span>
-                <span><div className="title">{l.name}</div><div className="desc">Your custom shared list.</div></span>
-                <span className="arrow">›</span>
-              </a>
+            {activeLists.map(l => (
+              <HubSwipeCard key={l.id} list={l} onPin={() => pinList(l)} onArchive={() => archiveList(l)} onDelete={() => deleteList(l)} />
             ))}
 
-            <button className="feature" onClick={() => { setNewName(''); setNewEmoji('📋'); setBuildOpen(true); }} style={{ cursor: 'pointer', textAlign: 'left', border: '1px dashed #d9cbb7', background: 'transparent', font: 'inherit', width: '100%' }}>
+            <button className="feature" onClick={() => { setNewName(''); setNewEmoji('📋'); setIconImage(null); setBuildOpen(true); }} style={{ cursor: 'pointer', textAlign: 'left', border: '1px dashed #d9cbb7', background: 'transparent', font: 'inherit', width: '100%' }}>
               <span className="ic" style={{ background: '#efe9e0', color: '#a8794f', fontSize: 24, lineHeight: 1 }}>+</span>
               <span><div className="title">Build new</div><div className="desc">Create your own shared list — name it anything.</div></span>
               <span className="arrow">›</span>
             </button>
           </div>
+
+          {archivedLists.length > 0 && (
+            <React.Fragment>
+              <button onClick={() => setArchivedOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 2px' }}>
+                <span className="label" style={{ margin: 0 }}>Archived ({archivedLists.length})</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#bcb3a6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: archivedOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .18s ease' }}><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              {archivedOpen && (
+                <div className="features" style={{ marginTop: 12, opacity: .82 }}>
+                  {archivedLists.map(l => <HubSwipeCard key={l.id} list={l} onUnarchive={() => unarchiveList(l)} onDelete={() => deleteList(l)} />)}
+                </div>
+              )}
+            </React.Fragment>
+          )}
         </main>
 
         <HomeButton href="./" />
@@ -196,9 +267,15 @@
                 <button onClick={() => setBuildOpen(false)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer' }}>×</button>
               </div>
               <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') create(); }} placeholder="List name (e.g. Movies to watch)" autoFocus style={{ width: '100%', border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '13px 15px', fontSize: 15, fontFamily: 'inherit', fontWeight: 700, color: '#3a352f', outline: 'none' }} />
-              <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' }}>Icon</div>
+              <div style={{ margin: '14px 0 8px', fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' }}>Icon — pick, type your own, or add an image</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ width: 46, height: 46, borderRadius: 12, background: '#f4e8dd', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: 24 }}>{iconImage ? <img src={iconImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : newEmoji}</span>
+                <input value={iconImage ? '' : newEmoji} onChange={(e) => { setIconImage(null); setNewEmoji(e.target.value || '📋'); }} placeholder="Type" maxLength={4} style={{ width: 64, textAlign: 'center', fontSize: 20, border: '1px solid #ece6db', background: '#fff', borderRadius: 11, padding: '9px 6px', fontFamily: 'inherit', outline: 'none' }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #ece6db', background: '#fff', borderRadius: 11, padding: '10px 14px', fontSize: 13, fontWeight: 800, color: '#7a7166', cursor: 'pointer' }}>Image<input type="file" accept="image/*" onChange={onIconFile} style={{ display: 'none' }} /></label>
+                {iconImage && <button onClick={() => setIconImage(null)} title="Remove image" style={{ border: 'none', background: '#f6ece9', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 15, cursor: 'pointer' }}>×</button>}
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {EMOJIS.map(em => <button key={em} onClick={() => setNewEmoji(em)} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid ' + (newEmoji === em ? '#c98a5c' : '#ece6db'), background: newEmoji === em ? '#f4e8dd' : '#fff', fontSize: 20, cursor: 'pointer' }}>{em}</button>)}
+                {EMOJIS.map(em => { const sel = !iconImage && newEmoji === em; return <button key={em} onClick={() => { setNewEmoji(em); setIconImage(null); }} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid ' + (sel ? '#c98a5c' : '#ece6db'), background: sel ? '#f4e8dd' : '#fff', fontSize: 20, cursor: 'pointer' }}>{em}</button>; })}
               </div>
               <button onClick={create} disabled={creating || !newName.trim()} style={{ marginTop: 20, width: '100%', background: newName.trim() ? '#c98a5c' : '#d9cfc0', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontWeight: 800, fontSize: 15, cursor: newName.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>{creating ? 'Creating…' : 'Create list'}</button>
             </div>
