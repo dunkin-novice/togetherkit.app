@@ -226,6 +226,9 @@ function buildTogetherView(state, actions, opts) {
     draftImportant: state.draftImportant,
     notDraftImportant: !state.draftImportant,
     setName: (e) => actions.set({ draftName: e.target.value }),
+    // Grocery autocomplete: fill the draft name and, when the product has a
+    // photo, thread it into draftImage so the created item carries the image.
+    applyGrocerySuggestion: (name, image) => actions.set(image ? { draftName: name, draftImage: image } : { draftName: name }),
     setLabel: (e) => actions.set({ draftLabel: e.target.value }),
     setUnit: (e) => actions.set({ draftUnit: e.target.value }),
     setQtyInput: (e) => { const v = parseInt(e.target.value, 10); actions.set({ draftQty: isNaN(v) || v < 1 ? 1 : v }); },

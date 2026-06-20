@@ -27,6 +27,88 @@ const closeX = { flexShrink: 0, width: 32, height: 32, borderRadius: '50%', bord
 const upper = { fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' };
 const fieldInput = { border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '13px 15px', fontSize: 15, fontFamily: 'inherit', color: '#3a352f', outline: 'none', fontWeight: 600 };
 
+// ── Grocery autocomplete ─────────────────────────────────────────────────────
+// Self-contained dropdown under the "Item name" input. Queries the keyless,
+// CORS-open Open Food Facts search API as the user types (≥2 chars, debounced
+// ~300ms), aborts stale requests, and on select fills the name + (when present)
+// the product photo via v.applyGrocerySuggestion. Purely additive — typing any
+// free-text item and adding it normally still works.
+function GroceryAutocomplete({ v }) {
+  const [results, setResults] = React.useState([]);
+  const [open, setOpen] = React.useState(false);
+  const ctrlRef = React.useRef(null);
+  const timerRef = React.useRef(null);
+  const boxRef = React.useRef(null);
+  const q = (v.draftName || '').trim();
+
+  React.useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (ctrlRef.current) { ctrlRef.current.abort(); ctrlRef.current = null; }
+    if (q.length < 2) { setResults([]); setOpen(false); return; }
+    timerRef.current = setTimeout(() => {
+      const ctrl = new AbortController();
+      ctrlRef.current = ctrl;
+      const url = 'https://world.openfoodfacts.org/cgi/search.pl?search_terms='
+        + encodeURIComponent(q)
+        + '&search_simple=1&action=process&json=1&page_size=8'
+        + '&fields=product_name,brands,image_small_url,code';
+      fetch(url, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (ctrl.signal.aborted) return;
+          const list = ((d && d.products) || [])
+            .filter(p => p && p.product_name && p.product_name.trim())
+            .slice(0, 8);
+          setResults(list);
+          setOpen(list.length > 0);
+        })
+        .catch(() => { /* network/abort/parse error → show nothing, free-text still works */ });
+    }, 300);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [q]);
+
+  React.useEffect(() => () => { if (ctrlRef.current) ctrlRef.current.abort(); }, []);
+
+  const pick = (p) => {
+    if (ctrlRef.current) { ctrlRef.current.abort(); ctrlRef.current = null; }
+    v.applyGrocerySuggestion(p.product_name.trim(), p.image_small_url || null);
+    setResults([]); setOpen(false);
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative' }}>
+      <input
+        value={v.draftName}
+        onChange={v.setName}
+        onFocus={() => { if (results.length) setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+        placeholder="Item name"
+        autoComplete="off"
+        style={fieldInput}
+      />
+      {open && results.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, zIndex: 5, background: '#fff', border: '1px solid #ece6db', borderRadius: 14, boxShadow: '0 12px 30px rgba(58,53,47,.16)', overflow: 'hidden', maxHeight: 264, overflowY: 'auto' }}>
+          {results.map((p, i) => (
+            <button
+              key={(p.code || '') + i}
+              onMouseDown={(e) => { e.preventDefault(); pick(p); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', background: 'none', border: 'none', borderBottom: i < results.length - 1 ? '1px solid #f4efe7' : 'none', padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {p.image_small_url
+                ? <img src={p.image_small_url} alt="" loading="lazy" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'cover', background: '#f5f0e8', flexShrink: 0 }} />
+                : <span style={{ width: 36, height: 36, borderRadius: 9, background: '#f5f0e8', color: '#c3b29a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><MIcons.Image size={16} stroke={2} /></span>}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#3a352f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.product_name}</span>
+                {p.brands && <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#9a9186', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.brands}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Add Item ─────────────────────────────────────────────────────────────────
 function AddModal({ v }) {
   if (!v.addOpen) return null;
@@ -38,7 +120,7 @@ function AddModal({ v }) {
           <button onClick={v.closeAdd} style={closeX}>×</button>
         </div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input value={v.draftName} onChange={v.setName} placeholder="Item name" style={fieldInput} />
+          <GroceryAutocomplete v={v} />
           <div style={{ display: 'flex', gap: 9 }}>
             <input type="number" min="1" value={v.draftQty} onChange={v.setQtyInput} style={{ width: 80, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: 12, fontSize: 15, fontFamily: 'inherit', fontWeight: 800, color: '#3a352f', outline: 'none', textAlign: 'center' }} />
             <input value={v.draftUnit} onChange={v.setUnit} list="together-units" placeholder="unit" style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '12px 13px', fontSize: 14, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none' }} />

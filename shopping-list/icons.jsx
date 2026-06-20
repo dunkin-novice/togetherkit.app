@@ -79,6 +79,14 @@ const Icons = {
     <Svg size={size} stroke={stroke} color={color}><path d="M4 12l5 5 11-12" /></Svg>
   ),
 
+  Heart: ({ size = 18, stroke = 2, filled = false, color }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? (color || 'currentColor') : 'none'} stroke={color || 'currentColor'} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 7.6 3 4.5 6.2 4.5c1.9 0 3.2 1 3.8 2.3.6-1.3 1.9-2.3 3.8-2.3 3.2 0 4.9 3.1 3.4 6.5C19 15.4 12 20 12 20z" /></svg>
+  ),
+
+  External: ({ size = 18, stroke = 2, color }) => (
+    <Svg size={size} stroke={stroke} color={color}><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" /></Svg>
+  ),
+
   // Brand mark — the two overlapping dots (primary + partner).
   Logo: ({ size = 18 }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>

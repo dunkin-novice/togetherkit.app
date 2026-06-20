@@ -33,19 +33,21 @@ function App() {
     const c = window.TogetherBackend.client; const hs = sx.homespaceId;
     (async () => {
       try {
-        const [items, ideas, notes, lists, citems] = await Promise.all([
+        const [items, ideas, notes, wish, lists, citems] = await Promise.all([
           c.from('items').select('done').eq('homespace_id', hs),
           c.from('ideas').select('scheduled').eq('homespace_id', hs),
           c.from('notes').select('id').eq('homespace_id', hs),
+          c.from('wishlist').select('got').eq('homespace_id', hs),
           c.from('custom_lists').select('id,name,emoji,icon_image,archived').eq('homespace_id', hs),
           c.from('custom_items').select('list_id,done').eq('homespace_id', hs),
         ]);
         if (!alive) return;
-        const I = items.data || [], D = ideas.data || [], N = notes.data || [], L = (lists.data || []).filter(l => !l.archived), CI = citems.data || [];
+        const I = items.data || [], D = ideas.data || [], N = notes.data || [], W = wish.data || [], L = (lists.data || []).filter(l => !l.archived), CI = citems.data || [];
         const out = [
           { key: 'shopping', name: 'Shopping List', emoji: '🛒', href: '../shopping-list/', count: I.length, done: I.filter(x => x.done).length, doneWord: 'Done' },
           { key: 'dates', name: 'Date Ideas', emoji: '💞', href: '../date-ideas/', count: D.length, done: D.filter(x => x.scheduled).length, doneWord: 'Scheduled' },
           { key: 'notes', name: 'Shared Notes', emoji: '📝', href: '../notes/', count: N.length, done: null, doneWord: '—' },
+          { key: 'wishlist', name: 'Wishlist', emoji: '🎁', href: '../wishlist/', count: W.length, done: W.filter(x => x.got).length, doneWord: 'Got' },
         ];
         L.forEach(l => {
           const mine = CI.filter(x => x.list_id === l.id);
