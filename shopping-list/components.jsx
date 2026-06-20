@@ -144,60 +144,49 @@ function EmptyState({ text, pad }) {
   return <div style={{ textAlign: 'center', padding: pad, color: '#b3a99c', fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>{text}</div>;
 }
 
-// ── Swipe-to-delete wrapper ─────────────────────────────────────────────────
-// Wraps a list item. Dragging left (touch or mouse) slides the item to reveal a
-// red "Delete" affordance; releasing past the threshold removes the item, a tap
-// passes through to open the detail, and a vertical drag yields to scrolling.
-function SwipeRow({ onDelete, radius = 0, frontBg, children }) {
+// ── Swipe wrapper (left = delete, right = complete) ─────────────────────────
+// Drag left to reveal a red "Delete"; drag right to reveal a green action
+// (e.g. "Done" / "Schedule") via onComplete. Release past the threshold fires;
+// a tap passes through, a vertical drag yields to scrolling. onComplete fires
+// then snaps back (the item stays); onDelete slides the item out.
+function SwipeRow({ onDelete, onComplete, completeLabel = 'Done', completeIcon, completeColor = '#6f9c5a', radius = 0, frontBg, children }) {
   const [dx, setDx] = React.useState(0);
   const [dragging, setDragging] = React.useState(false);
   const [removing, setRemoving] = React.useState(false);
-  const st = React.useRef(null);     // { x, y, active } during a gesture
-  const dxRef = React.useRef(0);     // live offset — read at release (state may lag)
+  const st = React.useRef(null);
+  const dxRef = React.useRef(0);
   const movedRef = React.useRef(false);
   const applyDx = (n) => { dxRef.current = n; setDx(n); };
-  const THRESHOLD = 88;              // px past which release deletes
-  const MAX = 128;                  // furthest the item slides while dragging
+  const THRESHOLD = 88, MAX = 128;
 
   const onPointerDown = (e) => {
     if (removing) return;
-    // Don't hijack taps on the interactive controls inside the row.
     if (e.target.closest('button, a, input, select, label')) return;
     st.current = { x: e.clientX, y: e.clientY, active: false };
     movedRef.current = false;
   };
   const onPointerMove = (e) => {
     if (!st.current || removing) return;
-    const dX = e.clientX - st.current.x;
-    const dY = e.clientY - st.current.y;
+    const dX = e.clientX - st.current.x, dY = e.clientY - st.current.y;
     if (!st.current.active) {
-      if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) {
-        st.current.active = true;
-        setDragging(true);
-        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
-      } else if (Math.abs(dY) > 10) {
-        st.current = null;            // vertical intent → let the page scroll
-        return;
-      }
+      if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} }
+      else if (Math.abs(dY) > 10) { st.current = null; return; }
     }
     if (st.current && st.current.active) {
-      const next = Math.max(-MAX, Math.min(0, dX));
+      // only allow the right (complete) direction when onComplete is provided
+      const lo = -MAX, hi = onComplete ? MAX : 0;
+      const next = Math.max(lo, Math.min(hi, dX));
       applyDx(next);
-      if (next < -6) movedRef.current = true;
+      if (Math.abs(next) > 6) movedRef.current = true;
     }
   };
   const finish = () => {
     if (!st.current) { setDragging(false); return; }
-    const active = st.current.active;
-    st.current = null;
-    setDragging(false);
+    const active = st.current.active; st.current = null; setDragging(false);
     if (!active) return;
-    if (dxRef.current <= -THRESHOLD) {
-      setRemoving(true);
-      window.setTimeout(() => onDelete && onDelete(), 200);
-    } else {
-      applyDx(0);
-    }
+    if (dxRef.current <= -THRESHOLD) { setRemoving(true); window.setTimeout(() => onDelete && onDelete(), 200); }
+    else if (onComplete && dxRef.current >= THRESHOLD) { applyDx(0); onComplete(); }
+    else applyDx(0);
   };
 
   return (
@@ -205,6 +194,11 @@ function SwipeRow({ onDelete, radius = 0, frontBg, children }) {
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: radius, background: '#c4604c', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, paddingRight: 22, color: '#fff', fontWeight: 800, fontSize: 14, opacity: (dx < 0 || removing) ? 1 : 0 }}>
         <Icons.Trash size={17} /> Delete
       </div>
+      {onComplete && (
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: radius, background: completeColor, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, paddingLeft: 22, color: '#fff', fontWeight: 800, fontSize: 14, opacity: dx > 0 ? 1 : 0 }}>
+          {completeIcon || <span style={{ fontSize: 16, fontWeight: 900 }}>✓</span>} {completeLabel}
+        </div>
+      )}
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

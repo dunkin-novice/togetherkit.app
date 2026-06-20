@@ -82,6 +82,8 @@ function buildTogetherView(state, actions, opts) {
       toggle: (e) => { e.stopPropagation(); actions.toggle(it.id); },
       remove: (e) => { e.stopPropagation(); actions.remove(it.id); },
       deleteSelf: () => actions.remove(it.id),
+      toggleDone: () => actions.toggle(it.id),
+      isDone: done,
       starToggle: (e) => { e.stopPropagation(); actions.toggleImportant(it.id); },
       open: () => actions.set({ detailId: it.id, editing: false }),
       openImg: (e) => { e.stopPropagation(); actions.set({ imageId: it.id }); },

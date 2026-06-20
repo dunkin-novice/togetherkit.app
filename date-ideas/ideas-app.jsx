@@ -283,7 +283,8 @@ function LinkButtons({ idea }) {
 // Swipe-left-to-delete wrapper (same gesture as the shopping list). Drag a
 // card/row left to reveal a red Delete affordance; release past the threshold
 // removes it, a tap passes through, a vertical drag yields to scrolling.
-function DSwipeRow({ onDelete, radius = 0, frontBg, children }) {
+// Left = delete, right = Schedule (opens the schedule sheet).
+function DSwipeRow({ onDelete, onComplete, completeLabel = 'Schedule', completeColor = '#6f9c5a', radius = 0, frontBg, children }) {
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -305,13 +306,14 @@ function DSwipeRow({ onDelete, radius = 0, frontBg, children }) {
       if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} }
       else if (Math.abs(dY) > 10) { st.current = null; return; }
     }
-    if (st.current && st.current.active) { const next = Math.max(-MAX, Math.min(0, dX)); applyDx(next); if (next < -6) movedRef.current = true; }
+    if (st.current && st.current.active) { const next = Math.max(-MAX, Math.min(onComplete ? MAX : 0, dX)); applyDx(next); if (Math.abs(next) > 6) movedRef.current = true; }
   };
   const finish = () => {
     if (!st.current) { setDragging(false); return; }
     const active = st.current.active; st.current = null; setDragging(false);
     if (!active) return;
     if (dxRef.current <= -THRESHOLD) { setRemoving(true); window.setTimeout(() => onDelete && onDelete(), 200); }
+    else if (onComplete && dxRef.current >= THRESHOLD) { applyDx(0); onComplete(); }
     else applyDx(0);
   };
   return (
@@ -319,6 +321,11 @@ function DSwipeRow({ onDelete, radius = 0, frontBg, children }) {
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: radius, background: '#c4604c', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, paddingRight: 22, color: '#fff', fontWeight: 800, fontSize: 14, opacity: (dx < 0 || removing) ? 1 : 0 }}>
         <DIcons.Trash size={17} /> Delete
       </div>
+      {onComplete && (
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: radius, background: completeColor, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, paddingLeft: 22, color: '#fff', fontWeight: 800, fontSize: 14, opacity: dx > 0 ? 1 : 0 }}>
+          <DIcons.Calendar size={15} color="#fff" /> {completeLabel}
+        </div>
+      )}
       <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={finish} onPointerCancel={finish}
         onClickCapture={(e) => { if (movedRef.current) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; } }}
         style={{ position: 'relative', background: frontBg, transform: removing ? 'translateX(-110%)' : ('translateX(' + dx + 'px)'), transition: dragging ? 'none' : 'transform .2s cubic-bezier(.3,.7,.4,1), opacity .2s ease', opacity: removing ? 0 : 1, touchAction: 'pan-y' }}>
@@ -613,10 +620,48 @@ function DetailModal({ v, primary, partner }) {
     </Overlay>
   );
 }
+// 12h label for an "HH:MM" string
+function fmt12(hm) { let [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + String(m).padStart(2, '0') + ' ' + ap; }
+// Custom time dropdown: each slot shows a red "busy" dot when it overlaps an
+// already-scheduled plan on the chosen date.
+function DTimePicker({ value, onChange, isBusy }) {
+  const [open, setOpen] = useState(false);
+  const slots = [];
+  for (let h = 6; h < 24; h++) for (const m of [0, 30]) slots.push(String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'));
+  const busyNow = isBusy(value);
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', border: '1px solid ' + (busyNow ? '#e6b6ae' : '#ece6db'), background: '#fff', borderRadius: 12, padding: '11px 12px', fontSize: 14, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, cursor: 'pointer' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>{busyNow && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d8584a', flexShrink: 0 }} />}{fmt12(value)}</span>
+        <DIcons.Chevron size={14} open={open} />
+      </button>
+      {open && (
+        <div className="tog-scroll" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 6, maxHeight: 196, overflowY: 'auto', background: '#fff', border: '1px solid #ece6db', borderRadius: 12, boxShadow: '0 14px 32px rgba(58,53,47,.2)', padding: 4 }}>
+          {slots.map(slot => {
+            const busy = isBusy(slot), sel = slot === value;
+            return (
+              <button key={slot} onClick={() => { onChange(slot); setOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8, padding: '9px 11px', borderRadius: 9, border: 'none', background: sel ? '#f4e8dd' : 'transparent', color: '#3a352f', fontWeight: sel ? 800 : 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <span>{fmt12(slot)}</span>
+                {busy && <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, color: '#c4604c' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d8584a' }} />busy</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScheduleModal({ v, primary, partner }) {
   if (!v.s.schedFor) return null;
   const s = v.s, idea = v.allById[s.schedFor];
   const members = v.members || [];
+  // overlap detection against other scheduled ideas on the chosen date (2h default duration)
+  const sameDay = (iso, dateStr) => { if (!iso || !dateStr) return false; const d = new Date(iso); const [y, mo, dd] = dateStr.split('-').map(Number); return d.getFullYear() === y && d.getMonth() === mo - 1 && d.getDate() === dd; };
+  const others = (v.scheduledList || []).filter(it => it.id !== s.schedFor && it.schedAt && sameDay(it.schedAt, s.schedDate));
+  const DUR = 120;
+  const isBusy = (slot) => { const [h, m] = slot.split(':').map(Number); const start = h * 60 + m; return others.some(it => { const d = new Date(it.schedAt); const os = d.getHours() * 60 + d.getMinutes(); return start < os + DUR && os < start + DUR; }); };
+  const startClash = isBusy(s.schedStart);
   const timeField = { border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 12px', fontSize: 14, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', width: '100%' };
   const InviteAvatar = ({ m }) => (<span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><DAvatar color={m.idx === 0 ? primary : partner} initial={(m.name[0] || '?').toUpperCase()} size={26} /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#3a352f' }}>{m.name}</span></span>);
   return (
@@ -629,9 +674,15 @@ function ScheduleModal({ v, primary, partner }) {
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>Date</span><input type="date" value={s.schedDate} onChange={(e) => v.a.set({ schedDate: e.target.value })} style={timeField} /></div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>Start</span><input type="time" value={s.schedStart} onChange={(e) => v.a.set({ schedStart: e.target.value })} style={timeField} /></div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>Start</span><DTimePicker value={s.schedStart} onChange={(t) => v.a.set({ schedStart: t })} isBusy={isBusy} /></div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}><span style={upper}>End <span style={{ color: '#c3b29a' }}>· optional</span></span><input type="time" value={s.schedEnd} onChange={(e) => v.a.set({ schedEnd: e.target.value })} style={timeField} /></div>
           </div>
+          {startClash && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fbeeea', border: '1px solid #eccfc7', borderRadius: 12, padding: '10px 13px', fontSize: 13, fontWeight: 700, color: '#b05a4a' }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#d8584a', flexShrink: 0 }} />
+              Heads up — this overlaps another plan you've scheduled.
+            </div>
+          )}
           <button onClick={() => v.a.set({ schedInvite: !s.schedInvite })} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#fff', border: '1px solid ' + (s.schedInvite ? '#cfe0cf' : '#ece6db'), borderRadius: 14, padding: '13px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
               <span style={{ fontSize: 13.5, fontWeight: 800, color: '#3a352f' }}>Invite both of us</span>
@@ -731,6 +782,7 @@ function buildView(state, actions, opts) {
       star: (e) => { e.stopPropagation(); actions.toggleImportant(it.id); },
       remove: (e) => { e.stopPropagation(); actions.remove(it.id); },
       deleteSelf: () => actions.remove(it.id),
+      scheduleSelf: () => actions.openSchedule(it.id),
       circle: (e) => { e.stopPropagation(); if (it.scheduled) actions.unschedule(it.id); else actions.openSchedule(it.id); },
     };
   };
@@ -917,6 +969,36 @@ function Board({ v, isDesktop, primary, partner }) {
   const goToday = () => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); };
   const catSummary = (v.catFilters.find(x => x.id === v.s.activeFilter) || {}).name || '';
   const statSummary = (v.statusFilters.find(x => x.id === v.s.statusFilter) || {}).name || '';
+
+  // Copy the currently-filtered ideas to the clipboard (text).
+  const [copied, setCopied] = useState(false);
+  const copyIdeas = async () => {
+    const lines = v.ideas.map(it => `${it.scheduled ? '📅' : '•'} ${it.name}${it.catName && it.catName !== '—' ? ' [' + it.catName + ']' : ''}${it.scheduled && it.schedText ? ' — ' + it.schedText : ''}${it.important ? ' ⭐' : ''}`);
+    const text = lines.length ? ('💡 Date ideas · ' + (v.listHeading || '') + '\n' + lines.join('\n')) : 'No ideas yet.';
+    try { await navigator.clipboard.writeText(text); } catch (e) {}
+    setCopied(true); window.setTimeout(() => setCopied(false), 1600);
+  };
+  // Export scheduled ideas as a .ics file (imports into any calendar incl. Google/Apple).
+  const scheduledCount = (v.scheduledList || []).length;
+  const exportCal = () => {
+    const pad = n => String(n).padStart(2, '0');
+    const z = d => '' + d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + '00Z';
+    const esc = s => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+    const evs = v.s.ideas.filter(i => i.scheduled && i.schedAt);
+    if (!evs.length) return;
+    const body = evs.map(i => {
+      const start = new Date(i.schedAt), end = new Date(start.getTime() + 2 * 3600 * 1000);
+      return ['BEGIN:VEVENT', 'UID:' + i.id + '@togetherkit.app', 'DTSTAMP:' + z(new Date()), 'DTSTART:' + z(start), 'DTEND:' + z(end), 'SUMMARY:' + esc(i.name)]
+        .concat(i.mapsUrl ? ['LOCATION:' + esc(i.mapsUrl)] : [])
+        .concat(i.schedNote ? ['DESCRIPTION:' + esc(i.schedNote)] : [])
+        .concat(['END:VEVENT']).join('\r\n');
+    });
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Together//Date Ideas//EN', 'CALSCALE:GREGORIAN'].concat(body).concat(['END:VCALENDAR']).join('\r\n');
+    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'together-date-ideas.ics'; document.body.appendChild(a); a.click(); a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const miniBtn = { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #ece6db', borderRadius: 999, padding: '7px 13px', fontSize: 12.5, fontFamily: 'inherit', color: '#7a7166', fontWeight: 800, cursor: 'pointer' };
   const addBtn = isDesktop
     ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: '12px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }
     : { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 15, padding: 14, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' };
@@ -950,6 +1032,17 @@ function Board({ v, isDesktop, primary, partner }) {
             {label}
           </button>
         ))}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={copyIdeas} title="Copy this list" style={miniBtn}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+          {scheduledCount > 0 && (
+            <button onClick={exportCal} title="Export scheduled plans (.ics)" style={miniBtn}>
+              <DIcons.Calendar size={13} /> Export
+            </button>
+          )}
+        </div>
       </div>
 
       {viewMode === 'calendar' && (
@@ -970,7 +1063,7 @@ function Board({ v, isDesktop, primary, partner }) {
             <span />{['Idea', 'Category', 'Added by', 'Status'].map(h => <span key={h} style={{ fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.7px', textTransform: 'uppercase' }}>{h}</span>)}<span />
           </div>
           {v.ideas.map(idea => (
-            <DSwipeRow key={idea.id} radius={0} frontBg={idea.important ? '#fdf8ee' : '#fff'} onDelete={idea.deleteSelf}>
+            <DSwipeRow key={idea.id} radius={0} frontBg={idea.important ? '#fdf8ee' : '#fff'} onDelete={idea.deleteSelf} onComplete={idea.scheduleSelf} completeLabel={idea.scheduled ? 'Reschedule' : 'Schedule'}>
               <IdeaRow idea={idea} partner={partner} />
             </DSwipeRow>
           ))}
@@ -990,7 +1083,7 @@ function Board({ v, isDesktop, primary, partner }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {v.ideas.map(idea => (
-              <DSwipeRow key={idea.id} radius={18} onDelete={idea.deleteSelf}>
+              <DSwipeRow key={idea.id} radius={18} onDelete={idea.deleteSelf} onComplete={idea.scheduleSelf} completeLabel={idea.scheduled ? 'Reschedule' : 'Schedule'}>
                 <IdeaCard idea={idea} partner={partner} />
               </DSwipeRow>
             ))}

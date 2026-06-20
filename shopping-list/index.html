@@ -116,6 +116,25 @@ function Board({ sx }) {
   const [state, actions] = window.useTogetherStore(sx.homespaceId, sx.me);
   const v = window.buildTogetherView(state, actions, { primary, partner, showDate, members: sx.members, me: sx.me });
 
+  // Copy the currently-filtered list to the clipboard (text, not a file).
+  const [copied, setCopied] = React.useState(false);
+  const copyList = async () => {
+    const lines = v.items.map(it => `${it.isDone ? '✓' : '•'} ${it.name}${it.qtyUnit ? ' — ' + it.qtyUnit : ''}${it.important ? ' ⭐' : ''}`);
+    const title = (sx.homespace && sx.homespace.name ? sx.homespace.name + ' · ' : '') + (v.listHeading || 'Shopping list');
+    const text = lines.length ? ('🛒 ' + title + '\n' + lines.join('\n')) : 'List is empty.';
+    try { await navigator.clipboard.writeText(text); } catch (e) {}
+    setCopied(true); window.setTimeout(() => setCopied(false), 1600);
+  };
+  const CopyBtn = ({ desk }) => (
+    <button onClick={copyList} title="Copy this list"
+      style={desk
+        ? { display: 'flex', alignItems: 'center', gap: 7, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 14, padding: '12px 18px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }
+        : { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 10px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, cursor: 'pointer' }}>
+      <svg width={desk ? 16 : 13} height={desk ? 16 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+
   // collapsible filter sections — remembered per device
   const FILT_KEY = 'togetherkit.filterui';
   const [filtersOpen, setFiltersOpen] = React.useState(() => {
@@ -164,6 +183,7 @@ function Board({ sx }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
               <Brand titleSize={34} subSize={15} dot={20} />
               <div style={{ display: 'flex', gap: 11 }}>
+                <CopyBtn desk />
                 <button onClick={v.openAdd} style={v.addItemBtnDeskStyle}><window.Icons.Plus size={17} />Add Item</button>
                 <button onClick={v.openBulk} style={v.bulkBtnDeskStyle}><window.Icons.Plus size={17} />Bulk Add</button>
               </div>
@@ -199,7 +219,7 @@ function Board({ sx }) {
                 <span />
               </div>
               {v.items.map(item => (
-                <SwipeRow key={item.id} radius={0} frontBg={item.important ? '#fdf8ee' : '#fff'} onDelete={item.deleteSelf}>
+                <SwipeRow key={item.id} radius={0} frontBg={item.important ? '#fdf8ee' : '#fff'} onDelete={item.deleteSelf} onComplete={item.toggleDone} completeLabel={item.isDone ? 'To Buy' : 'Done'}>
                   <ItemRow item={item} showDate={showDate} />
                 </SwipeRow>
               ))}
@@ -210,6 +230,7 @@ function Board({ sx }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 4px', gap: 10 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#857c70', letterSpacing: '.6px', textTransform: 'uppercase' }}>{v.listHeading}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CopyBtn />
                   <select value={v.sortMode} onChange={v.setSortMode} style={{ background: '#fff', border: '1px solid #ece6db', borderRadius: 9, padding: '5px 9px', fontSize: 12, fontFamily: 'inherit', color: '#7a7166', fontWeight: 700, outline: 'none', cursor: 'pointer' }}>
                     {v.sortOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                   </select>
@@ -218,7 +239,7 @@ function Board({ sx }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {v.items.map(item => (
-                  <SwipeRow key={item.id} radius={18} onDelete={item.deleteSelf}>
+                  <SwipeRow key={item.id} radius={18} onDelete={item.deleteSelf} onComplete={item.toggleDone} completeLabel={item.isDone ? 'To Buy' : 'Done'}>
                     <ItemCard item={item} showDate={showDate} />
                   </SwipeRow>
                 ))}
