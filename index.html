@@ -147,6 +147,38 @@
     );
   }
 
+  const PREBUILT = [
+    { key: 'shopping', href: './shopping-list/', title: 'Shopping List', desc: 'Our shared list — add, label and check things off.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13 5.4 5M7 13l-2 6h12"/><circle cx="9" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg> },
+    { key: 'dates', href: './date-ideas/', title: 'Date Ideas', desc: 'Dates, trips & activities — save them, then schedule together.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 7.6 3 4.5 6.2 4.5c1.9 0 3.2 1 3.8 2.3.6-1.3 1.9-2.3 3.8-2.3 3.2 0 4.9 3.1 3.4 6.5C19 15.4 12 20 12 20z"/></svg> },
+    { key: 'notes', href: './notes/', title: 'Shared Notes', desc: 'Jot anything down together — labels, important, in sync.', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg> },
+  ];
+
+  // A pre-built feature card with swipe-left → Remove (hide it from the hub;
+  // it can be re-added from the templates gallery).
+  function PrebuiltSwipeCard({ feat, onRemove }) {
+    const TRAY = 62;
+    const [dx, setDx] = React.useState(0); const [dragging, setDragging] = React.useState(false);
+    const st = React.useRef(null); const dxRef = React.useRef(0); const movedRef = React.useRef(false);
+    const apply = (n) => { dxRef.current = n; setDx(n); };
+    const down = (e) => { if (e.target.closest('button')) return; st.current = { x: e.clientX, y: e.clientY, base: dxRef.current, active: false }; movedRef.current = false; };
+    const move = (e) => { if (!st.current) return; const dX = e.clientX - st.current.x, dY = e.clientY - st.current.y; if (!st.current.active) { if (Math.abs(dX) > 8 && Math.abs(dX) > Math.abs(dY)) { st.current.active = true; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} } else if (Math.abs(dY) > 10) { st.current = null; return; } } if (st.current.active) { const n = Math.max(-TRAY, Math.min(0, st.current.base + dX)); apply(n); if (Math.abs(n - st.current.base) > 6) movedRef.current = true; } };
+    const up = () => { if (!st.current) { setDragging(false); return; } const a = st.current.active; st.current = null; setDragging(false); if (!a) return; apply(dxRef.current < -TRAY / 2 ? -TRAY : 0); };
+    return (
+      <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', alignItems: 'center', paddingRight: 12, paddingLeft: 12 }}>
+          <button onClick={() => { apply(0); onRemove(); }} title="Remove" style={{ width: 46, height: 46, borderRadius: 12, border: 'none', background: '#c4604c', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><window.Icons.Trash size={20} color="#fff" /></button>
+        </div>
+        <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClickCapture={(e) => { if (movedRef.current || dxRef.current !== 0) { e.preventDefault(); e.stopPropagation(); movedRef.current = false; if (dxRef.current !== 0) apply(0); } }} style={{ position: 'relative', transform: 'translateX(' + dx + 'px)', transition: dragging ? 'none' : 'transform .2s cubic-bezier(.3,.7,.4,1)', touchAction: 'pan-y' }}>
+          <a className="feature" href={feat.href} style={{ marginBottom: 0 }}>
+            <span className="ic">{feat.icon}</span>
+            <span><div className="title">{feat.title}</div><div className="desc">{feat.desc}</div></span>
+            <span className="arrow">›</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   function Hub({ sx }) {
     const { AccountButton, AccountSheet, HomeButton } = window.TogetherAccount;
     const BE = window.TogetherBackend;
@@ -164,14 +196,22 @@
       r.readAsDataURL(file);
     };
     const [archivedOpen, setArchivedOpen] = React.useState(false);
+    const [hidden, setHidden] = React.useState([]);
+    const [templatesOpen, setTemplatesOpen] = React.useState(false);
     const [bug, setBug] = React.useState({ open: false, sent: false, text: '' });
 
     React.useEffect(() => {
       if (!sx.homespaceId) return;
       let alive = true;
-      const load = () => BE.client.from('custom_lists').select('id,name,emoji,icon_image,pinned,archived,pos').eq('homespace_id', sx.homespaceId).order('pos', { ascending: true }).then(({ data }) => { if (alive) setLists(data || []); });
+      const load = () => {
+        BE.client.from('custom_lists').select('id,name,emoji,icon_image,pinned,archived,pos').eq('homespace_id', sx.homespaceId).order('pos', { ascending: true }).then(({ data }) => { if (alive) setLists(data || []); });
+        BE.client.from('homespaces').select('hidden_features').eq('id', sx.homespaceId).maybeSingle().then(({ data }) => { if (alive && data) setHidden(Array.isArray(data.hidden_features) ? data.hidden_features : []); });
+      };
       load();
-      const ch = BE.client.channel('hublists:' + sx.homespaceId).on('postgres_changes', { event: '*', schema: 'public', table: 'custom_lists', filter: 'homespace_id=eq.' + sx.homespaceId }, load).subscribe();
+      const ch = BE.client.channel('hublists:' + sx.homespaceId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_lists', filter: 'homespace_id=eq.' + sx.homespaceId }, load)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'homespaces', filter: 'id=eq.' + sx.homespaceId }, load)
+        .subscribe();
       return () => { alive = false; BE.client.removeChannel(ch); };
     }, [sx.homespaceId]);
 
@@ -198,6 +238,19 @@
     const activeLists = lists.filter(l => !l.archived).sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (a.pos - b.pos));
     const archivedLists = lists.filter(l => l.archived);
 
+    const saveHidden = (arr) => { setHidden(arr); BE.client.from('homespaces').update({ hidden_features: arr }).eq('id', sx.homespaceId).then(({ error }) => { if (error) console.warn('hidden update', error.message); }); };
+    const hideFeature = (key) => saveHidden([...hidden.filter(k => k !== key), key]);
+    const unhideFeature = (key) => { saveHidden(hidden.filter(k => k !== key)); setTemplatesOpen(false); };
+    const createWatchList = async () => {
+      const id = BE.newId();
+      const r = await BE.client.from('custom_lists').insert({ id, homespace_id: sx.homespaceId, name: 'Watch list', emoji: '🍿', created_by: sx.me && sx.me.uid, pos: Date.now() });
+      if (r.error) { console.warn('watchlist failed', r.error.message); return; }
+      const tones = ['dine', 'trip', 'purple', 'green', 'sand'];
+      await BE.client.from('custom_labels').insert(['Movies', 'Series', 'Anime', 'Documentary', 'Other'].map((n, i) => ({ homespace_id: sx.homespaceId, list_id: id, id: 'wl' + i, name: n, tone: tones[i], custom: true, sort: i })));
+      location.href = './list/?id=' + encodeURIComponent(id);
+    };
+    const hiddenPrebuilts = PREBUILT.filter(p => hidden.includes(p.key));
+
     return (
       <React.Fragment>
         <main className="shell">
@@ -205,31 +258,24 @@
           <h1>Together</h1>
           <p className="sub">Little apps for us</p>
 
-          <p className="label">Features</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p className="label" style={{ margin: '0 0 12px' }}>Features</p>
+            <a href="./summary/" title="Progress summary" style={{ fontSize: 12.5, fontWeight: 800, color: '#a8794f', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>Summary
+            </a>
+          </div>
           <div className="features">
-            <a className="feature" href="./shopping-list/">
-              <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13 5.4 5M7 13l-2 6h12"/><circle cx="9" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg></span>
-              <span><div className="title">Shopping List</div><div className="desc">Our shared list — add, label and check things off.</div></span>
-              <span className="arrow">›</span>
-            </a>
-            <a className="feature" href="./date-ideas/">
-              <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 7.6 3 4.5 6.2 4.5c1.9 0 3.2 1 3.8 2.3.6-1.3 1.9-2.3 3.8-2.3 3.2 0 4.9 3.1 3.4 6.5C19 15.4 12 20 12 20z"/></svg></span>
-              <span><div className="title">Date Ideas</div><div className="desc">Dates, trips &amp; activities — save them, then schedule together.</div></span>
-              <span className="arrow">›</span>
-            </a>
-            <a className="feature" href="./notes/">
-              <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
-              <span><div className="title">Shared Notes</div><div className="desc">Jot anything down together — labels, important, in sync.</div></span>
-              <span className="arrow">›</span>
-            </a>
+            {PREBUILT.filter(p => !hidden.includes(p.key)).map(p => (
+              <PrebuiltSwipeCard key={p.key} feat={p} onRemove={() => hideFeature(p.key)} />
+            ))}
 
             {activeLists.map(l => (
               <HubSwipeCard key={l.id} list={l} onPin={() => pinList(l)} onArchive={() => archiveList(l)} onDelete={() => deleteList(l)} />
             ))}
 
-            <button className="feature" onClick={() => { setNewName(''); setNewEmoji('📋'); setIconImage(null); setBuildOpen(true); }} style={{ cursor: 'pointer', textAlign: 'left', border: '1px dashed #d9cbb7', background: 'transparent', font: 'inherit', width: '100%' }}>
+            <button className="feature" onClick={() => setTemplatesOpen(true)} style={{ cursor: 'pointer', textAlign: 'left', border: '1px dashed #d9cbb7', background: 'transparent', font: 'inherit', width: '100%' }}>
               <span className="ic" style={{ background: '#efe9e0', color: '#a8794f', fontSize: 24, lineHeight: 1 }}>+</span>
-              <span><div className="title">Build new</div><div className="desc">Create your own shared list — name it anything.</div></span>
+              <span><div className="title">Build new</div><div className="desc">Add a template, a watch list, or your own.</div></span>
               <span className="arrow">›</span>
             </button>
           </div>
@@ -259,8 +305,39 @@
           <window.Icons.Bug size={21} />
         </button>
 
+        {templatesOpen && (
+          <div onClick={() => setTemplatesOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: '#f6f4ef', borderRadius: 26, boxShadow: '0 24px 60px rgba(58,53,47,.34)', padding: 22, maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 22, fontWeight: 700, margin: 0, color: '#3a352f' }}>Add to your hub</h2>
+                <button onClick={() => setTemplatesOpen(false)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer' }}>×</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button onClick={() => { setTemplatesOpen(false); setNewName(''); setNewEmoji('📋'); setIconImage(null); setBuildOpen(true); }} className="feature" style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #ece6db', background: '#fff', font: 'inherit', width: '100%', marginBottom: 0 }}>
+                  <span className="ic" style={{ background: '#efe9e0', color: '#a8794f', fontSize: 22 }}>✏️</span>
+                  <span><div className="title">Blank list</div><div className="desc">Name it, pick an icon, start from scratch.</div></span>
+                  <span className="arrow">›</span>
+                </button>
+                <button onClick={createWatchList} className="feature" style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #ece6db', background: '#fff', font: 'inherit', width: '100%', marginBottom: 0 }}>
+                  <span className="ic" style={{ fontSize: 22 }}>🍿</span>
+                  <span><div className="title">Watch list</div><div className="desc">Movies, series, anime &amp; more — labels ready.</div></span>
+                  <span className="arrow">›</span>
+                </button>
+                {hiddenPrebuilts.length > 0 && <div style={{ margin: '8px 0 2px', fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' }}>Re-add a feature</div>}
+                {hiddenPrebuilts.map(p => (
+                  <button key={p.key} onClick={() => unhideFeature(p.key)} className="feature" style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #ece6db', background: '#fff', font: 'inherit', width: '100%', marginBottom: 0 }}>
+                    <span className="ic">{p.icon}</span>
+                    <span><div className="title">{p.title}</div><div className="desc">{p.desc}</div></span>
+                    <span className="arrow" style={{ color: '#a8794f', fontWeight: 800, fontSize: 13 }}>Add</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {buildOpen && (
-          <div onClick={() => setBuildOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+          <div onClick={() => setBuildOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1310, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: '#f6f4ef', borderRadius: 26, boxShadow: '0 24px 60px rgba(58,53,47,.34)', padding: 22 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 22, fontWeight: 700, margin: 0, color: '#3a352f' }}>Build a new list</h2>
