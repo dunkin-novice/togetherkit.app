@@ -39,7 +39,9 @@ const auth = {
     // Preserve a pending ?invite across the Google round-trip (belt-and-braces:
     // it's also kept in the redirectTo query) so joining a homespace is reliable.
     try { const inv = new URLSearchParams(location.search).get('invite'); if (inv) localStorage.setItem('togetherkit.pendinginvite', inv); } catch (e) {}
-    return client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl() + location.search } });
+    // prompt=select_account forces Google's account chooser every time, so after
+    // signing out you can pick a different account (not silently re-use the last).
+    return client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl() + location.search, queryParams: { prompt: 'select_account' } } });
   },
   signInPassword: (email, password) => client.auth.signInWithPassword({ email, password }), // used for local testing
   signOut: () => client.auth.signOut(),
