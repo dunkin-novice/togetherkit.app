@@ -970,14 +970,9 @@ function Board({ v, isDesktop, primary, partner }) {
   const catSummary = (v.catFilters.find(x => x.id === v.s.activeFilter) || {}).name || '';
   const statSummary = (v.statusFilters.find(x => x.id === v.s.statusFilter) || {}).name || '';
 
-  // Copy the currently-filtered ideas to the clipboard (text).
-  const [copied, setCopied] = useState(false);
-  const copyIdeas = async () => {
-    const lines = v.ideas.map(it => `${it.scheduled ? '📅' : '•'} ${it.name}${it.catName && it.catName !== '—' ? ' [' + it.catName + ']' : ''}${it.scheduled && it.schedText ? ' — ' + it.schedText : ''}${it.important ? ' ⭐' : ''}`);
-    const text = lines.length ? ('💡 Date ideas · ' + (v.listHeading || '') + '\n' + lines.join('\n')) : 'No ideas yet.';
-    try { await navigator.clipboard.writeText(text); } catch (e) {}
-    setCopied(true); window.setTimeout(() => setCopied(false), 1600);
-  };
+  // Export: a setup sheet to pick which ideas (filter, default = current) and
+  // which fields (default = all), then Copy to clipboard.
+  const [exportOpen, setExportOpen] = useState(false);
   // Export scheduled ideas as a .ics file (imports into any calendar incl. Google/Apple).
   const scheduledCount = (v.scheduledList || []).length;
   const exportCal = () => {
@@ -999,6 +994,61 @@ function Board({ v, isDesktop, primary, partner }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const miniBtn = { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #ece6db', borderRadius: 999, padding: '7px 13px', fontSize: 12.5, fontFamily: 'inherit', color: '#7a7166', fontWeight: 800, cursor: 'pointer' };
+  function DExportSheet({ onClose }) {
+    const cats = v.s.categories;
+    const nameByUid = {}; (v.members || []).forEach(m => { nameByUid[m.uid] = m.name; });
+    const af = v.s.activeFilter, sf = v.s.statusFilter;
+    const [selCats, setSelCats] = useState(() => new Set(af === 'all' ? cats.map(c => c.id) : [af]));
+    const [incIdea, setIncIdea] = useState(sf !== 'scheduled');
+    const [incSched, setIncSched] = useState(sf !== 'idea');
+    const [impOnly, setImpOnly] = useState(sf === 'important');
+    const [fields, setFields] = useState({ category: true, links: true, by: true, status: true, important: true });
+    const [copied, setCopied] = useState(false);
+    const toggleCat = (id) => setSelCats(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    const tf = (k) => setFields(f => ({ ...f, [k]: !f[k] }));
+    const rows = v.s.ideas
+      .filter(it => selCats.has(it.catId))
+      .filter(it => (it.scheduled ? incSched : incIdea))
+      .filter(it => !impOnly || it.important);
+    const lines = rows.map(it => {
+      const cat = cats.find(c => c.id === it.catId);
+      let line = (it.scheduled ? '📅' : '•') + ' ' + it.name;
+      const tail = [];
+      if (fields.category && cat) tail.push('[' + cat.name + ']');
+      if (fields.status) tail.push(it.scheduled && it.schedText ? it.schedText : 'Idea');
+      if (fields.by && (nameByUid[it.byUser] || it.byName)) tail.push('(' + (nameByUid[it.byUser] || it.byName) + ')');
+      if (fields.important && it.important) tail.push('⭐');
+      if (tail.length) line += ' ' + tail.join(' ');
+      if (fields.links && it.mapsUrl) line += '\n   📍 ' + it.mapsUrl;
+      if (fields.links && it.siteUrl) line += '\n   🔗 ' + it.siteUrl;
+      return line;
+    });
+    const text = lines.length ? ('💡 Date ideas\n' + lines.join('\n')) : 'No ideas match these filters.';
+    const doCopy = async () => { try { await navigator.clipboard.writeText(text); } catch (e) {} setCopied(true); window.setTimeout(() => { setCopied(false); onClose(); }, 800); };
+    const Chip = ({ on, onClick, children }) => (
+      <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 999, border: '1px solid ' + (on ? primary : '#ece6db'), background: on ? primary : '#fff', color: on ? '#fff' : '#8a8175', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{on && <span style={{ fontSize: 11 }}>✓</span>}{children}</button>
+    );
+    const Sec = ({ label, children }) => (<div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}><span style={upper}>{label}</span><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{children}</div></div>);
+    return (
+      <Overlay onClose={onClose} z={1300}>
+        <Sheet stop={v.stop} maxWidth={380}>
+          <div style={{ padding: '22px 22px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div><h2 style={modalTitle}>Export ideas</h2><p style={{ margin: '4px 0 0', fontSize: 14, color: '#9a9186', fontWeight: 600 }}>Choose what to copy.</p></div>
+            <button onClick={onClose} style={closeX}>×</button>
+          </div>
+          <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Sec label="Categories to include">{cats.map(c => <Chip key={c.id} on={selCats.has(c.id)} onClick={() => toggleCat(c.id)}>{c.name}</Chip>)}</Sec>
+            <Sec label="Status"><Chip on={incIdea} onClick={() => setIncIdea(x => !x)}>Ideas</Chip><Chip on={incSched} onClick={() => setIncSched(x => !x)}>Scheduled</Chip><Chip on={impOnly} onClick={() => setImpOnly(x => !x)}>Important only</Chip></Sec>
+            <Sec label="Fields"><Chip on onClick={() => {}}>Name</Chip><Chip on={fields.category} onClick={() => tf('category')}>Category</Chip><Chip on={fields.status} onClick={() => tf('status')}>Status / date</Chip><Chip on={fields.by} onClick={() => tf('by')}>Added by</Chip><Chip on={fields.links} onClick={() => tf('links')}>Links</Chip><Chip on={fields.important} onClick={() => tf('important')}>Important ⭐</Chip></Sec>
+          </div>
+          <div style={{ padding: '16px 22px 22px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186' }}>{lines.length} idea{lines.length === 1 ? '' : 's'}</span>
+            <button onClick={doCopy} style={{ marginLeft: 'auto', flex: 1, maxWidth: 200, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>{copied ? 'Copied!' : 'Copy'}</button>
+          </div>
+        </Sheet>
+      </Overlay>
+    );
+  }
   const addBtn = isDesktop
     ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: '12px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }
     : { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 15, padding: 14, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' };
@@ -1033,17 +1083,18 @@ function Board({ v, isDesktop, primary, partner }) {
           </button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={copyIdeas} title="Copy this list" style={miniBtn}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-            {copied ? 'Copied!' : 'Copy'}
+          <button onClick={() => setExportOpen(true)} title="Export this list" style={miniBtn}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+            Export
           </button>
           {scheduledCount > 0 && (
-            <button onClick={exportCal} title="Export scheduled plans (.ics)" style={miniBtn}>
-              <DIcons.Calendar size={13} /> Export
+            <button onClick={exportCal} title="Export scheduled plans as a calendar file (.ics)" style={miniBtn}>
+              <DIcons.Calendar size={13} /> Calendar
             </button>
           )}
         </div>
       </div>
+      {exportOpen && <DExportSheet onClose={() => setExportOpen(false)} />}
 
       {viewMode === 'calendar' && (
         <CalendarView items={v.scheduledList} month={month} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} onToday={goToday}
