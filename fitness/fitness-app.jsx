@@ -7,6 +7,7 @@ const { useState, useRef, useMemo, useEffect, Fragment } = React;
 const FI = window.Icons;
 
 const UNITS = ['kg', 'lb'];
+const REACT_EMOJIS = ['👏', '🔥', '💪', '❤️', '😮', '👑'];
 const EXERCISES = [
   'Bench Press', 'Incline Bench Press', 'Dumbbell Press', 'Chest Fly', 'Push-up', 'Cable Crossover',
   'Deadlift', 'Romanian Deadlift', 'Pull-up', 'Lat Pulldown', 'Barbell Row', 'Seated Row', 'Face Pull',
@@ -63,8 +64,8 @@ const setsText = (w) => {
 function useFitnessStore(homespaceId, me) {
   const BE = window.TogetherBackend; const { client } = BE;
   const [state, setState] = useState(() => ({
-    tab: 'workouts', workouts: [], body: [], routines: [], syncing: true,
-    routineModal: false, routineEdit: null,
+    tab: 'workouts', workouts: [], body: [], routines: [], reactions: [], syncing: true,
+    routineModal: false, routineEdit: null, reactOpen: null,
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
@@ -78,19 +79,21 @@ function useFitnessStore(homespaceId, me) {
   useEffect(() => {
     if (!homespaceId) return; let alive = true; patch({ syncing: true });
     const refetch = async () => {
-      const [w, b, rt] = await Promise.all([
+      const [w, b, rt, rx] = await Promise.all([
         client.from('fitness_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('body_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('fitness_routines').select('*').eq('homespace_id', homespaceId).order('pos', { ascending: true }),
+        client.from('fitness_reactions').select('*').eq('homespace_id', homespaceId),
       ]);
       if (!alive) return;
-      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
+      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), reactions: (rx.data || []).map(r => ({ logId: r.log_id, userId: r.user_id, emoji: r.emoji, byName: r.by_name })), syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
     };
     refetch();
     const ch = client.channel('fitness:' + homespaceId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_logs', filter: 'homespace_id=eq.' + homespaceId }, refetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'body_logs', filter: 'homespace_id=eq.' + homespaceId }, refetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_routines', filter: 'homespace_id=eq.' + homespaceId }, refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_reactions', filter: 'homespace_id=eq.' + homespaceId }, refetch)
       .subscribe();
     return () => { alive = false; client.removeChannel(ch); };
   }, [client, homespaceId]);
@@ -199,6 +202,13 @@ function useFitnessStore(homespaceId, me) {
       patch(st => ({ body: [...st.body, e].sort((a, b) => (a.date < b.date ? -1 : 1)), bAddOpen: false, bDraft: { weight: '', unit: d.unit, bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false } }));
       db(client.from('body_logs').insert({ id: e.id, homespace_id: homespaceId, log_date: e.date, weight: e.weight, unit: e.unit, body_fat: e.bodyFat, muscle_mass: e.muscleMass, fat_mass: e.fatMass, by_user: e.byUser, by_name: e.byName }));
     },
+    toggleReaction: (logId, emoji) => {
+      const s = ref.current, m = meRef.current || {}; if (!m.uid) return;
+      const mine = s.reactions.find(r => r.logId === logId && r.userId === m.uid && r.emoji === emoji);
+      patch(st => ({ reactOpen: null, reactions: mine ? st.reactions.filter(r => !(r.logId === logId && r.userId === m.uid && r.emoji === emoji)) : [...st.reactions, { logId, userId: m.uid, emoji, byName: m.name }] }));
+      if (mine) db(client.from('fitness_reactions').delete().eq('log_id', logId).eq('user_id', m.uid).eq('emoji', emoji));
+      else db(client.from('fitness_reactions').insert({ homespace_id: homespaceId, log_id: logId, user_id: m.uid, emoji, by_name: m.name }));
+    },
     removeWorkout: (id) => { patch(s => ({ workouts: s.workouts.filter(w => w.id !== id) })); db(client.from('fitness_logs').delete().eq('id', id)); },
     removeBody: (id) => { patch(s => ({ body: s.body.filter(b => b.id !== id) })); db(client.from('body_logs').delete().eq('id', id)); },
   }), [client, homespaceId, BE]);
@@ -277,7 +287,9 @@ function buildView(state, actions, opts) {
   const bestKey = {};
   state.workouts.forEach(w => { const mw = maxW(w); if (mw == null) return; const k = (w.byUser || 'x') + '|' + w.exercise; const cur = bestKey[k]; if (!cur || mw > cur.w || (mw === cur.w && w.date < cur.date)) bestKey[k] = { id: w.id, w: mw, date: w.date }; });
   const prIds = new Set(Object.keys(bestKey).map(k => bestKey[k].id));
-  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), isPR: prIds.has(w.id), edit: () => actions.startEditWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
+  const reactsByLog = {}; state.reactions.forEach(r => { (reactsByLog[r.logId] = reactsByLog[r.logId] || []).push(r); });
+  const groupReacts = (logId) => { const rs = reactsByLog[logId] || []; const by = {}; rs.forEach(r => { by[r.emoji] = by[r.emoji] || { emoji: r.emoji, count: 0, mine: false, names: [] }; by[r.emoji].count++; if (me && r.userId === me.uid) by[r.emoji].mine = true; by[r.emoji].names.push(r.byName); }); return Object.keys(by).map(e => by[e]); };
+  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), isPR: prIds.has(w.id), reactions: groupReacts(w.id), mine: !!(me && w.byUser === me.uid), react: (emoji) => actions.toggleReaction(w.id, emoji), edit: () => actions.startEditWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
   const bodyByDate = state.body.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(b => ({ ...b, color: colorOf(b.byUser), initial: initialOf(b.byUser, b.byName), who: nameOf(b.byUser, b.byName), remove: () => actions.removeBody(b.id) }));
 
   // ── her-vs-you comparison ──
@@ -631,13 +643,26 @@ function Board({ v, isDesktop, primary, partner }) {
               {v.canRepeat && <button onClick={v.a.repeatLast} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 10, padding: '7px 12px', fontSize: 12.5, fontFamily: 'inherit', color: '#7a7166', fontWeight: 800, cursor: 'pointer' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></svg>Repeat last</button>}
             </div>
             {v.workouts.map(w => (
-              <div key={w.id} onClick={w.edit} style={{ ...card, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 15, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{w.exercise}</span>{w.isPR && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 7px', borderRadius: 999 }}>🏆 PR</span>}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
+              <div key={w.id} style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div onClick={w.edit} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 15, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{w.exercise}</span>{w.isPR && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 7px', borderRadius: 999 }}>🏆 PR</span>}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
+                  </div>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={w.color} initial={w.initial} />{shortDate(w.date)}</span>
+                  <button onClick={(ev) => { ev.stopPropagation(); w.remove(); }} title="Delete" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 4, lineHeight: 0 }}><FI.Trash size={16} /></button>
                 </div>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={w.color} initial={w.initial} />{shortDate(w.date)}</span>
-                <button onClick={(ev) => { ev.stopPropagation(); w.remove(); }} title="Delete" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 4, lineHeight: 0 }}><FI.Trash size={16} /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {w.reactions.map(r => <button key={r.emoji} onClick={() => w.react(r.emoji)} title={r.names.join(', ')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid ' + (r.mine ? '#e7d3a3' : '#ece6db'), background: r.mine ? '#fdf8ee' : '#fff', borderRadius: 999, padding: '3px 9px', fontSize: 12.5, fontWeight: 800, color: '#7a7166', cursor: 'pointer', fontFamily: 'inherit' }}>{r.emoji} {r.count}</button>)}
+                  <div style={{ position: 'relative' }}>
+                    <button onClick={() => v.a.set({ reactOpen: v.s.reactOpen === w.id ? null : w.id })} style={{ border: 'none', background: 'none', color: '#c3bbae', cursor: 'pointer', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', padding: '3px 6px' }}>{w.reactions.length ? '＋' : '☺ React'}</button>
+                    {v.s.reactOpen === w.id && (
+                      <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, background: '#fff', border: '1px solid #ece6db', borderRadius: 999, boxShadow: '0 8px 22px rgba(58,53,47,.18)', padding: '5px 7px', display: 'flex', gap: 3, zIndex: 8 }}>
+                        {REACT_EMOJIS.map(e => <button key={e} onClick={() => w.react(e)} style={{ border: 'none', background: 'none', fontSize: 19, cursor: 'pointer', padding: '2px 3px', lineHeight: 1 }}>{e}</button>)}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
             {!v.s.syncing && v.workouts.length === 0 && <div style={{ textAlign: 'center', padding: '30px 10px', color: '#b3a99c', fontWeight: 600, fontSize: 14 }}>No sets yet — tap “Log a set”.</div>}
