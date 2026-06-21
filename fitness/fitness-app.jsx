@@ -8,6 +8,9 @@ const FI = window.Icons;
 
 const UNITS = ['kg', 'lb'];
 const REACT_EMOJIS = ['👏', '🔥', '💪', '❤️', '😮', '👑'];
+const MUSCLE_GROUP = { chest: 'Chest', lats: 'Back', 'middle back': 'Back', 'lower back': 'Back', traps: 'Back', neck: 'Back', quadriceps: 'Legs', hamstrings: 'Legs', glutes: 'Legs', calves: 'Legs', adductors: 'Legs', abductors: 'Legs', shoulders: 'Shoulders', biceps: 'Arms', triceps: 'Arms', forearms: 'Arms', abdominals: 'Core' };
+const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
+const PRESET_GROUP = { 'Bench Press': 'Chest', 'Incline Bench Press': 'Chest', 'Dumbbell Press': 'Chest', 'Chest Fly': 'Chest', 'Push-up': 'Chest', 'Cable Crossover': 'Chest', 'Deadlift': 'Back', 'Romanian Deadlift': 'Legs', 'Pull-up': 'Back', 'Lat Pulldown': 'Back', 'Barbell Row': 'Back', 'Seated Row': 'Back', 'Face Pull': 'Back', 'Squat': 'Legs', 'Front Squat': 'Legs', 'Leg Press': 'Legs', 'Lunge': 'Legs', 'Leg Curl': 'Legs', 'Leg Extension': 'Legs', 'Calf Raise': 'Legs', 'Hip Thrust': 'Legs', 'Glute Bridge': 'Legs', 'Overhead Press': 'Shoulders', 'Lateral Raise': 'Shoulders', 'Front Raise': 'Shoulders', 'Arnold Press': 'Shoulders', 'Shrug': 'Shoulders', 'Bicep Curl': 'Arms', 'Hammer Curl': 'Arms', 'Preacher Curl': 'Arms', 'Tricep Extension': 'Arms', 'Tricep Pushdown': 'Arms', 'Dip': 'Arms', 'Plank': 'Core', 'Crunch': 'Core', 'Leg Raise': 'Core', 'Russian Twist': 'Core', 'Cable Crunch': 'Core' };
 const EXERCISES = [
   'Bench Press', 'Incline Bench Press', 'Dumbbell Press', 'Chest Fly', 'Push-up', 'Cable Crossover',
   'Deadlift', 'Romanian Deadlift', 'Pull-up', 'Lat Pulldown', 'Barbell Row', 'Seated Row', 'Face Pull',
@@ -328,6 +331,12 @@ function buildView(state, actions, opts) {
   for (let k = 0; k < 104 && need.length > 0; k++) { const both = need.every(m => trainedInWeek(m.uid, cur)); if (both) { streak++; started = true; } else if (started) break; cur -= 7 * DAY; }
   const thisWeekBoth = need.length > 0 && need.every(m => trainedInWeek(m.uid, weekStart(todayUTC)));
   const consistency = comparePeople.map(p => ({ uid: p.uid, name: p.name, color: p.color, initial: p.initial, days: Array.from({ length: 21 }, (_, i) => ({ active: !!(datesBy[p.uid] && datesBy[p.uid].has(dstr(todayUTC - (20 - i) * DAY))) })) }));
+  // weekly muscle-group focus (uses the bundled library's muscle data)
+  const exMuscles = {}; (state.exLib || []).forEach(x => { exMuscles[x.name.toLowerCase()] = x.muscles || []; });
+  const groupOf = (name) => { const ms = exMuscles[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
+  const mw2 = {}; MUSCLE_GROUPS.forEach(g => { mw2[g] = {}; });
+  state.workouts.forEach(w => { if (ts(w.date) < weekAgo) return; const g = groupOf(w.exercise); if (!g) return; const sets = w.sets || (w.setsDetail ? w.setsDetail.length : 1) || 1; mw2[g][w.byUser] = (mw2[g][w.byUser] || 0) + sets; });
+  const muscleFocus = MUSCLE_GROUPS.map(g => ({ group: g, perPerson: comparePeople.map(p => ({ uid: p.uid, color: p.color, sets: mw2[g][p.uid] || 0 })), total: comparePeople.reduce((a, p) => a + (mw2[g][p.uid] || 0), 0) })).filter(x => x.total > 0);
 
   return {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
@@ -337,7 +346,7 @@ function buildView(state, actions, opts) {
     lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
     canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
-    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency },
+    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus },
     exSuggestions: (q) => {
       const t = (q || '').toLowerCase().trim();
       const lib = (state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' }));
@@ -617,6 +626,20 @@ function CompareSection({ v }) {
         <span style={upper}>This week</span>
         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>{people.map(p => <Big key={p.uid} p={p} />)}</div>
       </div>
+      {c.muscleFocus && c.muscleFocus.length > 0 && (() => { const max = Math.max(...c.muscleFocus.map(x => x.total)); return (
+        <div style={card}>
+          <span style={upper}>This week's muscle focus</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 }}>
+            {c.muscleFocus.map(m => (
+              <div key={m.group} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 62, fontSize: 12.5, fontWeight: 800, color: '#3a352f', flexShrink: 0 }}>{m.group}</span>
+                <div style={{ flex: 1, display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden', background: '#efe9e0' }}>{m.perPerson.filter(p => p.sets > 0).map(p => <span key={p.uid} title={p.sets + ' sets'} style={{ width: (p.sets / max * 100) + '%', background: p.color }} />)}</div>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#9a9186', width: 18, textAlign: 'right' }}>{m.total}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ); })()}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span style={upper}>Personal records — heaviest 🏆</span>
         {rows.length === 0 && <div style={{ ...card, textAlign: 'center', color: '#b3a99c', fontWeight: 600, fontSize: 14, padding: '24px 10px' }}>Log some sets to compare PRs.</div>}
