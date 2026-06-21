@@ -32,7 +32,7 @@ const today = () => { const d = new Date(); return d.getFullYear() + '-' + Strin
 const shortDate = (s) => { if (!s) return ''; const p = String(s).split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; };
 
 const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
-const rowToB = (r) => ({ id: r.id, date: r.log_date, weight: r.weight, unit: r.unit || 'kg', bodyFat: r.body_fat, muscleMass: r.muscle_mass, fatMass: r.fat_mass, byUser: r.by_user, byName: r.by_name });
+const rowToB = (r) => ({ id: r.id, date: r.log_date, weight: r.weight, unit: r.unit || 'kg', bodyFat: r.body_fat, muscleMass: r.muscle_mass, fatMass: r.fat_mass, photo: r.photo || null, byUser: r.by_user, byName: r.by_name });
 const rowToRoutine = (r) => ({ id: r.id, name: r.name, exercises: Array.isArray(r.exercises) ? r.exercises : [], byUser: r.by_user, byName: r.by_name });
 const emptyRRow = (unit) => ({ ex: '', sets: '', reps: '', weight: '', unit: unit || 'kg' });
 // heaviest weight in an entry (handles per-set detail / drop sets)
@@ -73,7 +73,8 @@ function useFitnessStore(homespaceId, me) {
     routineModal: false, routineEdit: null, reactOpen: null, rest: null,
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
-    bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
+    bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', photo: null, date: today(), advanced: false },
+    photoCompare: false,
     graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight', exLib: [],
   }));
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
@@ -211,11 +212,11 @@ function useFitnessStore(homespaceId, me) {
     },
     addBody: () => {
       const s = ref.current, d = s.bDraft, m = meRef.current || { uid: null, name: 'Me' };
-      if (d.weight === '' && d.bodyFat === '' && d.muscleMass === '' && d.fatMass === '') return;
       const num = (v) => v === '' ? null : Number(v);
-      const e = { id: BE.newId(), date: d.date, weight: num(d.weight), unit: d.unit, bodyFat: num(d.bodyFat), muscleMass: num(d.muscleMass), fatMass: num(d.fatMass), byUser: m.uid, byName: m.name };
-      patch(st => ({ body: [...st.body, e].sort((a, b) => (a.date < b.date ? -1 : 1)), bAddOpen: false, bDraft: { weight: '', unit: d.unit, bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false } }));
-      db(client.from('body_logs').insert({ id: e.id, homespace_id: homespaceId, log_date: e.date, weight: e.weight, unit: e.unit, body_fat: e.bodyFat, muscle_mass: e.muscleMass, fat_mass: e.fatMass, by_user: e.byUser, by_name: e.byName }));
+      if (d.weight === '' && d.bodyFat === '' && d.muscleMass === '' && d.fatMass === '' && !d.photo) return;
+      const e = { id: BE.newId(), date: d.date, weight: num(d.weight), unit: d.unit, bodyFat: num(d.bodyFat), muscleMass: num(d.muscleMass), fatMass: num(d.fatMass), photo: d.photo || null, byUser: m.uid, byName: m.name };
+      patch(st => ({ body: [...st.body, e].sort((a, b) => (a.date < b.date ? -1 : 1)), bAddOpen: false, bDraft: { weight: '', unit: d.unit, bodyFat: '', muscleMass: '', fatMass: '', photo: null, date: today(), advanced: false } }));
+      db(client.from('body_logs').insert({ id: e.id, homespace_id: homespaceId, log_date: e.date, weight: e.weight, unit: e.unit, body_fat: e.bodyFat, muscle_mass: e.muscleMass, fat_mass: e.fatMass, photo: e.photo, by_user: e.byUser, by_name: e.byName }));
     },
     toggleReaction: (logId, emoji) => {
       const s = ref.current, m = meRef.current || {}; if (!m.uid) return;
@@ -464,11 +465,17 @@ function EditWorkout({ v, primary }) {
 function AddBody({ v, primary }) {
   if (!v.s.bAddOpen) return null;
   const d = v.s.bDraft;
+  const onPhoto = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const img = new Image(); img.onload = () => { const S = 520, ratio = Math.min(1, S / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = img.width * ratio; c.height = img.height * ratio; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); v.a.setBDraft({ photo: c.toDataURL('image/jpeg', 0.82) }); }; img.src = r.result; }; r.readAsDataURL(f); };
   return (
     <Overlay onClose={() => v.a.set({ bAddOpen: false })}>
       <Sheet stop={v.stop} maxWidth={380}>
         <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Log body stats</h2><button onClick={() => v.a.set({ bAddOpen: false })} style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', border: '1px solid #ece6db', background: '#fff', borderRadius: 14, padding: 10 }}>
+            <span style={{ width: 52, height: 52, borderRadius: 11, background: '#f2ece2', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{d.photo ? <img src={d.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📷'}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#7a7166' }}>{d.photo ? 'Photo added — tap to change' : 'Add a progress photo (optional)'}</span>
+            <input type="file" accept="image/*" onChange={onPhoto} style={{ display: 'none' }} />
+          </label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input value={d.weight} onChange={(e) => v.a.setBDraft({ weight: e.target.value })} type="number" inputMode="decimal" placeholder="Weight" autoFocus style={{ ...fieldInput, flex: 1 }} />
             <div style={{ display: 'flex', borderRadius: 12, overflow: 'hidden', border: '1px solid #ece6db' }}>{UNITS.map(u => <button key={u} onClick={() => v.a.setBDraft({ unit: u })} style={{ border: 'none', padding: '0 14px', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', background: d.unit === u ? primary : '#fff', color: d.unit === u ? '#fff' : '#9a9186' }}>{u}</button>)}</div>
@@ -670,6 +677,32 @@ function CompareSection({ v }) {
   );
 }
 
+function PhotoCompare({ v }) {
+  const photos = v.body.filter(b => b.photo).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const [li, setLi] = useState(0);
+  const [ri, setRi] = useState(Math.max(0, photos.length - 1));
+  const close = () => v.a.set({ photoCompare: false });
+  if (!photos.length) { return <Overlay onClose={close} z={1260}><Sheet stop={v.stop} maxWidth={420}><div style={{ padding: 30, textAlign: 'center', color: '#b3a99c', fontWeight: 600 }}>No progress photos yet.</div></Sheet></Overlay>; }
+  const L = photos[Math.min(li, photos.length - 1)], R = photos[Math.min(ri, photos.length - 1)];
+  const Side = ({ p, idx, set }) => (
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ width: '100%', aspectRatio: '3/4', background: '#f2ece2', borderRadius: 12, overflow: 'hidden' }}><img src={p.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+      <div style={{ position: 'relative' }}>
+        <select value={idx} onChange={(e) => set(Number(e.target.value))} style={{ ...selStyle, width: '100%' }}>{photos.map((x, i) => <option key={x.id} value={i}>{shortDate(x.date)}{x.byName ? ' · ' + x.byName : ''}{x.weight != null ? ' · ' + x.weight + x.unit : ''}</option>)}</select>
+        <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><FI.Chevron size={12} /></span>
+      </div>
+    </div>
+  );
+  return (
+    <Overlay onClose={close} z={1260}>
+      <Sheet stop={v.stop} maxWidth={440}>
+        <div style={{ padding: '20px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Progress photos</h2><button onClick={close} style={closeX}>×</button></div>
+        <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px 8px', display: 'flex', gap: 10 }}><Side p={L} idx={li} set={setLi} /><Side p={R} idx={ri} set={setRi} /></div>
+        <div style={{ padding: '12px 22px 20px' }}><button onClick={close} style={{ ...cancelBtn, flex: 'none', width: '100%' }}>Done</button></div>
+      </Sheet>
+    </Overlay>
+  );
+}
 function Board({ v, isDesktop, primary, partner }) {
   const tab = v.s.tab;
   const addBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: isDesktop ? '12px 22px' : 14, fontWeight: 800, fontSize: isDesktop ? 14.5 : 15, cursor: 'pointer', fontFamily: 'inherit', width: isDesktop ? 'auto' : '100%' };
@@ -750,9 +783,13 @@ function Board({ v, isDesktop, primary, partner }) {
             {legend(v.bSeries)}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            <span style={upper}>{v.body.length} entr{v.body.length === 1 ? 'y' : 'ies'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <span style={upper}>{v.body.length} entr{v.body.length === 1 ? 'y' : 'ies'}</span>
+              {v.body.some(b => b.photo) && <button onClick={() => v.a.set({ photoCompare: true })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 10, padding: '7px 12px', fontSize: 12.5, fontFamily: 'inherit', color: '#7a7166', fontWeight: 800, cursor: 'pointer' }}>📷 Compare photos</button>}
+            </div>
             {v.body.map(b => (
               <div key={b.id} style={{ ...card, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                {b.photo && <img src={b.photo} alt="" style={{ width: 40, height: 40, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: '#3a352f' }}>{b.weight != null ? b.weight + ' ' + b.unit : '—'}</div>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{[b.bodyFat != null ? 'fat ' + b.bodyFat + '%' : null, b.muscleMass != null ? 'muscle ' + b.muscleMass : null].filter(Boolean).join(' · ') || ' '}</div>
@@ -796,7 +833,7 @@ function BoardShell({ sx }) {
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
-      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />
+      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />{v.s.photoCompare && <PhotoCompare v={v} />}
       <TweaksPanel title="Tweaks"><TweakSection label="People"><TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)} options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} /><TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)} options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} /></TweakSection></TweaksPanel>
     </div>
   );
