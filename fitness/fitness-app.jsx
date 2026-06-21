@@ -290,6 +290,21 @@ function buildView(state, actions, opts) {
   const comparePeople = members.map(m => ({ uid: m.uid, name: nameOf(m.uid), color: colorOf(m.uid), initial: initialOf(m.uid), stat: stat[m.uid] || { sets: 0, vol: 0, weekSets: 0, weekVol: 0, pr: {} }, body: latestBody[m.uid] || null }));
   const prRows = compExercises.map(ex => { const cells = comparePeople.map(p => ({ uid: p.uid, weight: p.stat.pr[ex] != null ? p.stat.pr[ex] : null })); const best = Math.max(-1, ...cells.map(c => c.weight == null ? -1 : c.weight)); return { exercise: ex, cells: cells.map(c => ({ ...c, win: c.weight != null && c.weight === best && best > 0 })) }; });
 
+  // ── together-streak + consistency (calm, co-op) ──
+  const DAY = 86400000;
+  const todayUTC = (() => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); })();
+  const datesBy = {}; members.forEach(m => { datesBy[m.uid] = new Set(); });
+  state.workouts.forEach(w => { if (datesBy[w.byUser]) datesBy[w.byUser].add(w.date); });
+  const dstr = (t) => new Date(t).toISOString().slice(0, 10);
+  const weekStart = (t) => { const d = new Date(t); const dow = (d.getUTCDay() + 6) % 7; return t - dow * DAY; };
+  const trainedInWeek = (uid, ws) => { const s = datesBy[uid]; if (!s) return false; for (let i = 0; i < 7; i++) if (s.has(dstr(ws + i * DAY))) return true; return false; };
+  const activeM = members.filter(m => datesBy[m.uid] && datesBy[m.uid].size);
+  const need = activeM.length >= 2 ? activeM : members.filter(m => datesBy[m.uid] && datesBy[m.uid].size);
+  let streak = 0, started = false, cur = weekStart(todayUTC);
+  for (let k = 0; k < 104 && need.length > 0; k++) { const both = need.every(m => trainedInWeek(m.uid, cur)); if (both) { streak++; started = true; } else if (started) break; cur -= 7 * DAY; }
+  const thisWeekBoth = need.length > 0 && need.every(m => trainedInWeek(m.uid, weekStart(todayUTC)));
+  const consistency = comparePeople.map(p => ({ uid: p.uid, name: p.name, color: p.color, initial: p.initial, days: Array.from({ length: 21 }, (_, i) => ({ active: !!(datesBy[p.uid] && datesBy[p.uid].has(dstr(todayUTC - (20 - i) * DAY))) })) }));
+
   return {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
@@ -298,7 +313,7 @@ function buildView(state, actions, opts) {
     lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
     canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
-    compare: { people: comparePeople, prRows },
+    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency },
     exSuggestions: (q) => { const t = (q || '').toLowerCase().trim(); const base = t ? EXERCISES.filter(e => e.toLowerCase().includes(t)) : EXERCISES; return base.slice(0, 8); },
   };
 }
@@ -518,8 +533,27 @@ function CompareSection({ v }) {
       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#9a9186', marginTop: 4 }}>{fmt(p.stat.weekVol)} vol · {p.stat.sets} all-time</div>
     </div>
   );
+  const c = v.compare;
   return (
     <Fragment>
+      <div style={{ ...card, background: c.streak > 0 ? 'linear-gradient(135deg,#fbf3e6,#f3ece1)' : '#fff', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ fontSize: 34, lineHeight: 1 }}>{c.streak > 0 ? '🔥' : '🤝'}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 19, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{c.streak > 0 ? c.streak + '-week streak together' : 'Start a streak together'}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#9a9186', marginTop: 2 }}>{c.streak > 0 ? (c.thisWeekBoth ? 'Both trained this week — keep it alive ✨' : 'Both train once this week to keep it going') : 'Both train at least once this week to begin'}</div>
+        </div>
+      </div>
+      <div style={card}>
+        <span style={upper}>Last 3 weeks</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {c.consistency.map(p => (
+            <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <span style={{ width: 22, height: 22, borderRadius: '50%', background: p.color, color: '#fff', fontWeight: 800, fontSize: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{p.initial}</span>
+              <div style={{ display: 'flex', gap: 3, flex: 1 }}>{p.days.map((d, i) => <span key={i} title={d.active ? 'trained' : ''} style={{ flex: 1, height: 14, borderRadius: 3, background: d.active ? p.color : '#efe9e0' }} />)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
       <div style={card}>
         <span style={upper}>This week</span>
         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>{people.map(p => <Big key={p.uid} p={p} />)}</div>
