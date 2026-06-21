@@ -284,12 +284,13 @@ function buildView(state, actions, opts) {
   const ge = state.graphExercise && exercisesLogged.includes(state.graphExercise) ? state.graphExercise : (exercisesLogged[0] || '');
   // workout graph: per person, max weight per day for the selected exercise
   const wMetric = state.workoutMetric || 'weight';
-  const wVal = (w) => wMetric === 'e1rm' ? e1rmOf(w) : maxW(w);
+  const wVal = (w) => { if (wMetric === 'e1rm') return e1rmOf(w); if (wMetric === 'volume') { const mw = maxW(w); return mw == null ? null : mw * (Number(w.reps) || 1) * (w.sets || (w.setsDetail ? w.setsDetail.length : 1) || 1); } return maxW(w); };
   const wSeriesMap = {};
   state.workouts.filter(w => w.exercise === ge && wVal(w) != null).forEach(w => {
     const k = w.byUser || 'x'; wSeriesMap[k] = wSeriesMap[k] || {};
     const day = w.date; const v = wVal(w);
-    if (wSeriesMap[k][day] == null || v > wSeriesMap[k][day]) wSeriesMap[k][day] = v;
+    if (wMetric === 'volume') wSeriesMap[k][day] = (wSeriesMap[k][day] || 0) + v;
+    else if (wSeriesMap[k][day] == null || v > wSeriesMap[k][day]) wSeriesMap[k][day] = v;
   });
   const wSeries = Object.keys(wSeriesMap).map(uid => ({ name: nameOf(uid), color: colorOf(uid), points: Object.keys(wSeriesMap[uid]).map(day => ({ t: ts(day), y: wSeriesMap[uid][day] })) }));
 
@@ -404,7 +405,13 @@ function AddWorkout({ v, primary }) {
                     <div style={{ display: 'flex', gap: 8 }}>
                       <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>SETS</div><input value={b.sets} onChange={(e) => v.a.setBlock(i, { sets: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="3" style={numIn} /></div>
                       <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>REPS</div><input value={b.reps} onChange={(e) => v.a.setBlock(i, { reps: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="8" style={numIn} /></div>
-                      <div style={{ flex: 1.2 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>WEIGHT</div><input value={b.weight} onChange={(e) => v.a.setBlock(i, { weight: e.target.value })} onFocus={focusScroll} type="number" inputMode="decimal" placeholder="60" style={numIn} /></div>
+                      <div style={{ flex: 1.7 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>WEIGHT</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <button onClick={() => { const st = b.unit === 'lb' ? 5 : 2.5; v.a.setBlock(i, { weight: String(Math.max(0, Math.round(((Number(b.weight) || 0) - st) * 100) / 100)) }); }} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 37, borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>−</button>
+                          <input value={b.weight} onChange={(e) => v.a.setBlock(i, { weight: e.target.value })} onFocus={focusScroll} type="number" inputMode="decimal" placeholder="60" style={{ ...numIn, flex: 1, padding: '10px 2px', minWidth: 0 }} />
+                          <button onClick={() => { const st = b.unit === 'lb' ? 5 : 2.5; v.a.setBlock(i, { weight: String(Math.round(((Number(b.weight) || 0) + st) * 100) / 100) }); }} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 37, borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>+</button>
+                        </div>
+                      </div>
                     </div>
                     {(() => { const pt = platesText(b.weight, b.unit); return pt ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#a8794f', margin: '-2px 2px 0' }}>🏋️ Per side: {pt}</div> : null; })()}
                   </Fragment>
@@ -733,7 +740,7 @@ function Board({ v, isDesktop, primary, partner }) {
             {v.exercisesLogged.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
                 <div style={{ display: 'flex', gap: 4, background: '#f2ece2', borderRadius: 9, padding: 3 }}>
-                  {[{ id: 'weight', label: 'Top weight' }, { id: 'e1rm', label: 'Est. 1RM' }].map(o => <button key={o.id} onClick={() => v.a.set({ workoutMetric: o.id })} style={{ border: 'none', borderRadius: 7, padding: '5px 11px', fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', background: v.workoutMetric === o.id ? '#fff' : 'transparent', color: v.workoutMetric === o.id ? '#3a352f' : '#9a9186' }}>{o.label}</button>)}
+                  {[{ id: 'weight', label: 'Weight' }, { id: 'e1rm', label: '1RM' }, { id: 'volume', label: 'Volume' }].map(o => <button key={o.id} onClick={() => v.a.set({ workoutMetric: o.id })} style={{ border: 'none', borderRadius: 7, padding: '5px 10px', fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', background: v.workoutMetric === o.id ? '#fff' : 'transparent', color: v.workoutMetric === o.id ? '#3a352f' : '#9a9186' }}>{o.label}</button>)}
                 </div>
                 {v.bestE1rm(v.graphExercise) != null && <span style={{ fontSize: 12, fontWeight: 800, color: '#6f7d52', background: '#eef1e6', padding: '4px 10px', borderRadius: 999 }}>Best 1RM ≈ {v.bestE1rm(v.graphExercise)}</span>}
               </div>
