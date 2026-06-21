@@ -16,11 +16,21 @@ const EXERCISES = [
   'Plank', 'Crunch', 'Leg Raise', 'Russian Twist', 'Cable Crunch',
   'Treadmill', 'Cycling', 'Rowing', 'Elliptical',
 ];
+const STARTERS = [
+  { name: 'Full Body', exercises: [{ ex: 'Squat', sets: 3, reps: 8 }, { ex: 'Bench Press', sets: 3, reps: 8 }, { ex: 'Barbell Row', sets: 3, reps: 8 }, { ex: 'Overhead Press', sets: 3, reps: 10 }, { ex: 'Deadlift', sets: 1, reps: 5 }] },
+  { name: 'Upper', exercises: [{ ex: 'Bench Press', sets: 4, reps: 6 }, { ex: 'Barbell Row', sets: 4, reps: 6 }, { ex: 'Overhead Press', sets: 3, reps: 8 }, { ex: 'Lat Pulldown', sets: 3, reps: 10 }, { ex: 'Bicep Curl', sets: 3, reps: 12 }, { ex: 'Tricep Pushdown', sets: 3, reps: 12 }] },
+  { name: 'Lower', exercises: [{ ex: 'Squat', sets: 4, reps: 6 }, { ex: 'Romanian Deadlift', sets: 3, reps: 8 }, { ex: 'Leg Press', sets: 3, reps: 10 }, { ex: 'Leg Curl', sets: 3, reps: 12 }, { ex: 'Calf Raise', sets: 4, reps: 15 }] },
+  { name: 'Push', exercises: [{ ex: 'Bench Press', sets: 4, reps: 6 }, { ex: 'Overhead Press', sets: 3, reps: 8 }, { ex: 'Incline Bench Press', sets: 3, reps: 10 }, { ex: 'Lateral Raise', sets: 3, reps: 15 }, { ex: 'Tricep Pushdown', sets: 3, reps: 12 }] },
+  { name: 'Pull', exercises: [{ ex: 'Deadlift', sets: 3, reps: 5 }, { ex: 'Pull-up', sets: 3, reps: 8 }, { ex: 'Barbell Row', sets: 3, reps: 8 }, { ex: 'Lat Pulldown', sets: 3, reps: 12 }, { ex: 'Bicep Curl', sets: 3, reps: 12 }] },
+  { name: 'Legs', exercises: [{ ex: 'Squat', sets: 4, reps: 6 }, { ex: 'Leg Press', sets: 3, reps: 10 }, { ex: 'Lunge', sets: 3, reps: 10 }, { ex: 'Leg Curl', sets: 3, reps: 12 }, { ex: 'Calf Raise', sets: 4, reps: 15 }] },
+];
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const shortDate = (s) => { if (!s) return ''; const p = String(s).split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; };
 
 const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
 const rowToB = (r) => ({ id: r.id, date: r.log_date, weight: r.weight, unit: r.unit || 'kg', bodyFat: r.body_fat, muscleMass: r.muscle_mass, fatMass: r.fat_mass, byUser: r.by_user, byName: r.by_name });
+const rowToRoutine = (r) => ({ id: r.id, name: r.name, exercises: Array.isArray(r.exercises) ? r.exercises : [], byUser: r.by_user, byName: r.by_name });
+const emptyRRow = (unit) => ({ ex: '', sets: '', reps: '', weight: '', unit: unit || 'kg' });
 // heaviest weight in an entry (handles per-set detail / drop sets)
 const maxW = (w) => { if (w.setsDetail && w.setsDetail.length) { const ws = w.setsDetail.map(s => Number(s.weight)).filter(x => !isNaN(x)); return ws.length ? Math.max(...ws) : null; } return w.weight != null ? Number(w.weight) : null; };
 const emptyWBlock = (unit) => ({ ex: '', unit: unit || 'kg', mode: 'simple', sets: '', reps: '', weight: '', rows: [{ weight: '', reps: '', drop: false }] });
@@ -37,7 +47,8 @@ const setsText = (w) => {
 function useFitnessStore(homespaceId, me) {
   const BE = window.TogetherBackend; const { client } = BE;
   const [state, setState] = useState(() => ({
-    tab: 'workouts', workouts: [], body: [], syncing: true,
+    tab: 'workouts', workouts: [], body: [], routines: [], syncing: true,
+    routineModal: false, routineEdit: null,
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
@@ -51,17 +62,19 @@ function useFitnessStore(homespaceId, me) {
   useEffect(() => {
     if (!homespaceId) return; let alive = true; patch({ syncing: true });
     const refetch = async () => {
-      const [w, b] = await Promise.all([
+      const [w, b, rt] = await Promise.all([
         client.from('fitness_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('body_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
+        client.from('fitness_routines').select('*').eq('homespace_id', homespaceId).order('pos', { ascending: true }),
       ]);
       if (!alive) return;
-      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
+      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
     };
     refetch();
     const ch = client.channel('fitness:' + homespaceId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_logs', filter: 'homespace_id=eq.' + homespaceId }, refetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'body_logs', filter: 'homespace_id=eq.' + homespaceId }, refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_routines', filter: 'homespace_id=eq.' + homespaceId }, refetch)
       .subscribe();
     return () => { alive = false; client.removeChannel(ch); };
   }, [client, homespaceId]);
@@ -108,6 +121,39 @@ function useFitnessStore(homespaceId, me) {
         ? { ex: w.exercise, unit: w.unit, mode: 'detail', sets: '', reps: '', weight: '', rows: w.setsDetail.map(r => ({ weight: r.weight == null ? '' : String(r.weight), reps: r.reps == null ? '' : String(r.reps), drop: !!r.drop })) }
         : { ex: w.exercise, unit: w.unit, mode: 'simple', sets: w.sets == null ? '' : String(w.sets), reps: w.reps == null ? '' : String(w.reps), weight: w.weight == null ? '' : String(w.weight), rows: [{ weight: '', reps: '', drop: false }] });
       patch({ wSession: { date: today(), blocks: blocks.length ? blocks : [emptyWBlock('kg')] }, wAddOpen: true, exFocusKey: null });
+    },
+    // ── routines / templates ──
+    newRoutine: () => patch({ routineEdit: { id: null, name: '', rows: [emptyRRow('kg')] } }),
+    editRoutine: (id) => { const r = ref.current.routines.find(x => x.id === id); if (!r) return; patch({ routineEdit: { id, name: r.name, rows: r.exercises.length ? r.exercises.map(e => ({ ex: e.ex || e.exercise || '', sets: e.sets == null ? '' : String(e.sets), reps: e.reps == null ? '' : String(e.reps), weight: e.weight == null ? '' : String(e.weight), unit: e.unit || 'kg' })) : [emptyRRow('kg')] } }); },
+    setRoutineEdit: (p) => patch(s => ({ routineEdit: { ...s.routineEdit, ...p } })),
+    routineRowSet: (j, p) => patch(s => ({ routineEdit: { ...s.routineEdit, rows: s.routineEdit.rows.map((r, k) => k === j ? { ...r, ...p } : r) } })),
+    routineRowAdd: () => patch(s => ({ routineEdit: { ...s.routineEdit, rows: [...s.routineEdit.rows, emptyRRow((s.routineEdit.rows.slice(-1)[0] || {}).unit)] } })),
+    routineRowRemove: (j) => patch(s => ({ routineEdit: { ...s.routineEdit, rows: s.routineEdit.rows.length > 1 ? s.routineEdit.rows.filter((_, k) => k !== j) : s.routineEdit.rows } })),
+    saveRoutine: () => {
+      const s = ref.current, re = s.routineEdit, m = meRef.current || {}; if (!re) return;
+      const name = (re.name || '').trim() || 'Routine';
+      const exercises = re.rows.filter(r => (r.ex || '').trim()).map(r => ({ ex: r.ex.trim(), sets: r.sets === '' ? null : Number(r.sets), reps: r.reps === '' ? null : Number(r.reps), weight: r.weight === '' ? null : Number(r.weight), unit: r.unit }));
+      if (!exercises.length) { patch({ routineEdit: null }); return; }
+      const id = re.id || BE.newId();
+      patch(st => ({ routineEdit: null, routines: re.id ? st.routines.map(x => x.id === id ? { ...x, name, exercises } : x) : [...st.routines, { id, name, exercises, byUser: m.uid, byName: m.name }] }));
+      if (re.id) db(client.from('fitness_routines').update({ name, exercises }).eq('id', id));
+      else db(client.from('fitness_routines').insert({ id, homespace_id: homespaceId, name, exercises, by_user: m.uid, by_name: m.name, pos: Date.now() }));
+    },
+    deleteRoutine: (id) => { patch(s => ({ routines: s.routines.filter(r => r.id !== id) })); db(client.from('fitness_routines').delete().eq('id', id)); },
+    useStarter: (st) => { const m = meRef.current || {}; const id = BE.newId(); const exercises = st.exercises.map(e => ({ ex: e.ex, sets: e.sets, reps: e.reps, weight: null, unit: 'kg' })); patch(s => ({ routines: [...s.routines, { id, name: st.name, exercises, byUser: m.uid, byName: m.name }] })); db(client.from('fitness_routines').insert({ id, homespace_id: homespaceId, name: st.name, exercises, by_user: m.uid, by_name: m.name, pos: Date.now() })); },
+    startRoutine: (id) => {
+      const r = ref.current.routines.find(x => x.id === id); if (!r) return;
+      const blocks = r.exercises.map(e => ({ ex: e.ex || e.exercise || '', unit: e.unit || 'kg', mode: 'simple', sets: e.sets == null ? '' : String(e.sets), reps: e.reps == null ? '' : String(e.reps), weight: e.weight == null ? '' : String(e.weight), rows: [{ weight: '', reps: '', drop: false }] }));
+      patch({ wSession: { date: today(), blocks: blocks.length ? blocks : [emptyWBlock('kg')] }, wAddOpen: true, routineModal: false, exFocusKey: null });
+    },
+    saveSessionAsRoutine: () => {
+      const s = ref.current, sess = s.wSession, m = meRef.current || {};
+      const blocks = sess.blocks.filter(b => (b.ex || '').trim()); if (!blocks.length) return;
+      const name = (window.prompt('Name this routine') || '').trim(); if (!name) return;
+      const exercises = blocks.map(b => ({ ex: b.ex.trim(), sets: b.sets === '' ? null : Number(b.sets), reps: b.reps === '' ? null : Number(b.reps), weight: b.weight === '' ? null : Number(b.weight), unit: b.unit }));
+      const id = BE.newId();
+      patch(st => ({ routines: [...st.routines, { id, name, exercises, byUser: m.uid, byName: m.name }] }));
+      db(client.from('fitness_routines').insert({ id, homespace_id: homespaceId, name, exercises, by_user: m.uid, by_name: m.name, pos: Date.now() }));
     },
     startEditWorkout: (id) => { const w = ref.current.workouts.find(x => x.id === id); if (!w) return; patch({ wEditId: id, wEdit: { exercise: w.exercise, weight: w.weight == null ? '' : String(w.weight), unit: w.unit, reps: w.reps == null ? '' : String(w.reps), sets: w.sets == null ? '' : String(w.sets), date: w.date } }); },
     setEdit: (p) => patch(s => ({ wEdit: { ...s.wEdit, ...p } })),
@@ -280,7 +326,10 @@ function AddWorkout({ v, primary }) {
               </div>
             );
           })}
-          <button onClick={v.a.addBlock} style={{ border: '1px dashed #cbb9a2', background: 'transparent', color: '#a8794f', borderRadius: 13, padding: 12, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add another exercise</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={v.a.addBlock} style={{ flex: 1, border: '1px dashed #cbb9a2', background: 'transparent', color: '#a8794f', borderRadius: 13, padding: 12, fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add exercise</button>
+            <button onClick={v.a.saveSessionAsRoutine} title="Save as routine" style={{ flexShrink: 0, border: '1px solid #e6ded2', background: '#fff', color: '#7a7166', borderRadius: 13, padding: '12px 14px', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>☆ Save as routine</button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ ...upper, flexShrink: 0 }}>Date</span><input value={sess.date} onChange={(e) => v.a.setSession({ date: e.target.value })} type="date" style={{ ...fieldInput, flex: 1 }} /></div>
         </div>
         <div style={{ padding: '14px 18px 20px', display: 'flex', gap: 10 }}><button onClick={close} style={cancelBtn}>Cancel</button><button onClick={v.a.addSession} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Save workout</button></div>
@@ -351,6 +400,75 @@ function useIsDesktop(bp = 720) { const get = () => typeof window !== 'undefined
 const card = { background: '#fff', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.035)' };
 const selStyle = { border: '1px solid #ece6db', background: '#fff', borderRadius: 10, padding: '7px 26px 7px 11px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' };
 
+function RoutinesModal({ v, primary }) {
+  if (!v.s.routineModal) return null;
+  const close = () => v.a.set({ routineModal: false });
+  return (
+    <Overlay onClose={close} z={1240}>
+      <Sheet stop={v.stop} maxWidth={400}>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Routines</h2><button onClick={close} style={closeX}>×</button></div>
+        <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <button onClick={v.a.newRoutine} style={{ border: '1px dashed #cbb9a2', background: 'transparent', color: '#a8794f', borderRadius: 13, padding: 12, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>+ New routine</button>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.5px', textTransform: 'uppercase', margin: '2px 2px 0' }}>Start from a template</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{STARTERS.map(st => <button key={st.name} onClick={() => v.a.useStarter(st)} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', borderRadius: 999, padding: '7px 13px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>+ {st.name}</button>)}</div>
+          {v.s.routines.length > 0 && <div style={{ fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.5px', textTransform: 'uppercase', margin: '6px 2px 0' }}>Your routines</div>}
+          {v.s.routines.map(r => (
+            <div key={r.id} style={{ ...card, padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{r.name}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9a9186', marginTop: 1 }}>{r.exercises.length} exercise{r.exercises.length === 1 ? '' : 's'}</div>
+              </div>
+              <button onClick={() => v.a.startRoutine(r.id)} style={{ background: primary, color: '#fff', border: 'none', borderRadius: 10, padding: '7px 13px', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Start</button>
+              <button onClick={() => v.a.editRoutine(r.id)} title="Edit" style={{ border: 'none', background: '#ece6db', color: '#857c70', width: 30, height: 30, borderRadius: 9, cursor: 'pointer', flexShrink: 0 }}>✎</button>
+              <button onClick={() => { if (window.confirm('Delete routine “' + r.name + '”?')) v.a.deleteRoutine(r.id); }} title="Delete" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 4, lineHeight: 0 }}><FI.Trash size={15} /></button>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '14px 22px 20px' }}><button onClick={close} style={{ ...cancelBtn, flex: 'none', width: '100%' }}>Done</button></div>
+      </Sheet>
+    </Overlay>
+  );
+}
+function RoutineEditor({ v, primary }) {
+  if (!v.s.routineEdit) return null;
+  const re = v.s.routineEdit;
+  const [focus, setFocus] = React.useState(null);
+  const close = () => v.a.set({ routineEdit: null });
+  return (
+    <Overlay onClose={close} z={1260}>
+      <Sheet stop={v.stop} maxWidth={400}>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>{re.id ? 'Edit routine' : 'New routine'}</h2><button onClick={close} style={closeX}>×</button></div>
+        <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+          <input value={re.name} onChange={(e) => v.a.setRoutineEdit({ name: e.target.value })} placeholder="Routine name — e.g. Push A" autoFocus style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 16 }} />
+          {re.rows.map((r, j) => {
+            const sugg = v.exSuggestions(r.ex);
+            return (
+              <div key={j} style={{ border: '1px solid #ece6db', borderRadius: 14, padding: 10, background: '#fff', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+                {re.rows.length > 1 && <button onClick={() => v.a.routineRowRemove(j)} style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', border: 'none', background: '#f3ece1', color: '#b3a99c', fontSize: 13, cursor: 'pointer', zIndex: 2 }}>×</button>}
+                <div style={{ position: 'relative' }}>
+                  <input value={r.ex} onChange={(e) => v.a.routineRowSet(j, { ex: e.target.value })} onFocus={(e) => { setFocus(j); focusScroll(e); }} placeholder="Exercise" style={{ ...fieldInput, fontSize: 14.5, padding: '10px 30px 10px 12px' }} />
+                  {focus === j && sugg.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: '1px solid #ece6db', borderRadius: 12, boxShadow: '0 10px 26px rgba(58,53,47,.16)', zIndex: 6, maxHeight: 180, overflowY: 'auto', padding: 5 }}>
+                      {sugg.map(name => <button key={name} onMouseDown={(e) => { e.preventDefault(); setFocus(null); v.a.routineRowSet(j, { ex: name }); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '8px 10px', borderRadius: 8, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}>{name}</button>)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, fontWeight: 800, color: '#aaa093', marginBottom: 2, textAlign: 'center' }}>SETS</div><input value={r.sets} onChange={(e) => v.a.routineRowSet(j, { sets: e.target.value })} type="number" placeholder="3" style={numIn} /></div>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, fontWeight: 800, color: '#aaa093', marginBottom: 2, textAlign: 'center' }}>REPS</div><input value={r.reps} onChange={(e) => v.a.routineRowSet(j, { reps: e.target.value })} type="number" placeholder="8" style={numIn} /></div>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, fontWeight: 800, color: '#aaa093', marginBottom: 2, textAlign: 'center' }}>WT</div><input value={r.weight} onChange={(e) => v.a.routineRowSet(j, { weight: e.target.value })} type="number" placeholder="—" style={numIn} /></div>
+                  <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid #ece6db' }}>{UNITS.map(u => <button key={u} onClick={() => v.a.routineRowSet(j, { unit: u })} style={{ border: 'none', padding: '8px 8px', fontWeight: 800, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', background: r.unit === u ? primary : '#fff', color: r.unit === u ? '#fff' : '#9a9186' }}>{u}</button>)}</div>
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={v.a.routineRowAdd} style={{ border: '1px dashed #cbb9a2', background: 'transparent', color: '#a8794f', borderRadius: 12, padding: 11, fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add exercise</button>
+        </div>
+        <div style={{ padding: '14px 18px 20px', display: 'flex', gap: 10 }}><button onClick={close} style={cancelBtn}>Cancel</button><button onClick={v.a.saveRoutine} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Save routine</button></div>
+      </Sheet>
+    </Overlay>
+  );
+}
 function CompareSection({ v }) {
   const people = v.compare.people, rows = v.compare.prRows;
   const fmt = (n) => Math.round(n * 10) / 10;
@@ -416,6 +534,10 @@ function Board({ v, isDesktop, primary, partner }) {
 
       {tab === 'compare' ? <CompareSection v={v} /> : tab === 'workouts' ? (
         <Fragment>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+            {v.s.routines.map(r => <button key={r.id} onClick={() => v.a.startRoutine(r.id)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}><span style={{ color: primary }}>▶</span>{r.name}</button>)}
+            <button onClick={() => v.a.set({ routineModal: true })} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed #cbb9a2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#a8794f', fontWeight: 800, cursor: 'pointer' }}>☰ Routines</button>
+          </div>
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
               <span style={upper}>Progress</span>
@@ -498,7 +620,7 @@ function BoardShell({ sx }) {
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
-      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} />
+      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />
       <TweaksPanel title="Tweaks"><TweakSection label="People"><TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)} options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} /><TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)} options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} /></TweakSection></TweaksPanel>
     </div>
   );
