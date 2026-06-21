@@ -51,6 +51,8 @@ const platesText = (total, unit) => {
   if (perSide > 0.02 || !out.length) return null;
   return out.join(' + ');
 };
+let _actx = null;
+const beep = () => { try { _actx = _actx || new (window.AudioContext || window.webkitAudioContext)(); const o = _actx.createOscillator(), g = _actx.createGain(); o.connect(g); g.connect(_actx.destination); o.frequency.value = 880; g.gain.value = 0.07; o.start(); setTimeout(() => { o.frequency.value = 1100; }, 90); setTimeout(() => o.stop(), 200); } catch (e) {} };
 // summarise an entry for the list card
 const setsText = (w) => {
   if (w.setsDetail && w.setsDetail.length) return w.setsDetail.map(s => (s.weight != null ? s.weight : '–') + '×' + (s.reps != null ? s.reps : '–') + (s.drop ? ' drop' : '')).join(', ');
@@ -65,7 +67,7 @@ function useFitnessStore(homespaceId, me) {
   const BE = window.TogetherBackend; const { client } = BE;
   const [state, setState] = useState(() => ({
     tab: 'workouts', workouts: [], body: [], routines: [], reactions: [], syncing: true,
-    routineModal: false, routineEdit: null, reactOpen: null,
+    routineModal: false, routineEdit: null, reactOpen: null, rest: null,
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
@@ -100,6 +102,9 @@ function useFitnessStore(homespaceId, me) {
 
   const actions = useMemo(() => ({
     set: patch,
+    startRest: (sec) => patch({ rest: { endsAt: Date.now() + sec * 1000, total: sec } }),
+    addRest: (sec) => patch(s => ({ rest: s.rest ? { ...s.rest, endsAt: s.rest.endsAt + sec * 1000, total: s.rest.total + sec } : { endsAt: Date.now() + sec * 1000, total: sec } })),
+    stopRest: () => patch({ rest: null }),
     setBDraft: (p) => patch(s => ({ bDraft: { ...s.bDraft, ...p } })),
     // ── workout session builder (multi-exercise) ──
     setSession: (p) => patch(s => ({ wSession: { ...s.wSession, ...p } })),
@@ -464,6 +469,27 @@ function useIsDesktop(bp = 720) { const get = () => typeof window !== 'undefined
 const card = { background: '#fff', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(58,53,47,.05),0 6px 16px rgba(58,53,47,.035)' };
 const selStyle = { border: '1px solid #ece6db', background: '#fff', borderRadius: 10, padding: '7px 26px 7px 11px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' };
 
+function RestTimer({ v, primary }) {
+  const r = v.s.rest;
+  const [, tick] = useState(0);
+  const doneRef = useRef(false);
+  useEffect(() => { if (!r) return; const id = setInterval(() => tick(t => t + 1), 250); return () => clearInterval(id); }, [r && r.endsAt]);
+  if (!r) return null;
+  const remMs = Math.max(0, r.endsAt - Date.now());
+  const done = remMs <= 0; const rem = Math.ceil(remMs / 1000);
+  if (done && !doneRef.current) { doneRef.current = true; if (navigator.vibrate) { try { navigator.vibrate([120, 70, 120]); } catch (e) {} } beep(); setTimeout(() => v.a.stopRest(), 4000); }
+  if (!done) doneRef.current = false;
+  const mm = Math.floor(rem / 60), ss = rem % 60;
+  return (
+    <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 1500, background: done ? '#6f9c5a' : '#3a352f', color: '#fff', borderRadius: 999, boxShadow: '0 12px 30px rgba(58,53,47,.34)', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px 8px 16px', fontFamily: 'inherit' }}>
+      {done ? <span style={{ fontWeight: 800, fontSize: 14.5 }}>💪 Rest done!</span> : <Fragment>
+        <span style={{ fontWeight: 800, fontSize: 17, fontVariantNumeric: 'tabular-nums', minWidth: 46 }}>{mm}:{String(ss).padStart(2, '0')}</span>
+        <button onClick={() => v.a.addRest(30)} style={{ border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', borderRadius: 999, padding: '6px 11px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+30s</button>
+      </Fragment>}
+      <button onClick={() => v.a.stopRest()} title="Stop" style={{ border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
 function RoutinesModal({ v, primary }) {
   if (!v.s.routineModal) return null;
   const close = () => v.a.set({ routineModal: false });
@@ -618,6 +644,7 @@ function Board({ v, isDesktop, primary, partner }) {
       {tab === 'compare' ? <CompareSection v={v} /> : tab === 'workouts' ? (
         <Fragment>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+            <button onClick={() => v.a.startRest(90)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}>⏱ Rest</button>
             {v.s.routines.map(r => <button key={r.id} onClick={() => v.a.startRoutine(r.id)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}><span style={{ color: primary }}>▶</span>{r.name}</button>)}
             <button onClick={() => v.a.set({ routineModal: true })} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed #cbb9a2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#a8794f', fontWeight: 800, cursor: 'pointer' }}>☰ Routines</button>
           </div>
@@ -720,6 +747,7 @@ function BoardShell({ sx }) {
   return (
     <div className="app">
       <div className="app-shell"><Board v={v} isDesktop={isDesktop} primary={primary} partner={partner} /></div>
+      <RestTimer v={v} primary={primary} />
       {v.s.prToast && <div style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 1500, background: '#3a352f', color: '#fff', fontWeight: 800, fontSize: 14, padding: '11px 18px', borderRadius: 999, boxShadow: '0 10px 30px rgba(58,53,47,.3)', animation: 'tog-pop .2s ease', maxWidth: '90vw', textAlign: 'center' }}>{v.s.prToast}</div>}
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
