@@ -184,8 +184,7 @@ function useTogetherStore(homespaceId, me) {
     sendBug: () => {
       const s = stateRef.current, m = meRef.current || {};
       try {
-        console.info('[Together] Bug report', { message: s.bugText, email: s.bugEmail, by: m.name, homespaceId,
-          when: new Date().toISOString(), ua: navigator.userAgent });
+        window.TogetherBackend.reportBug({ message: (s.bugText || '') + (s.bugEmail ? ' [' + s.bugEmail + ']' : ''), page: 'shopping-list', homespaceId, byUser: m.uid, byName: m.name });
       } catch (e) {}
       patch({ bugSent: true });
     },

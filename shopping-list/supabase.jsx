@@ -47,6 +47,21 @@ const auth = {
   signOut: () => client.auth.signOut(),
 };
 
+// Store a bug report (fire-and-forget). Captured in the bug_reports table —
+// the bug button used to only console.log, so feedback was being lost.
+const reportBug = (info) => {
+  try {
+    return client.from('bug_reports').insert({
+      message: (info && info.message) || '',
+      page: (info && info.page) || location.pathname,
+      homespace_id: (info && info.homespaceId) || null,
+      by_user: (info && info.byUser) || null,
+      by_name: (info && info.byName) || null,
+      user_agent: navigator.userAgent,
+    }).then(r => { if (r && r.error) console.warn('[togetherkit] bug report failed', r.error.message); }, () => {});
+  } catch (e) { return Promise.resolve(); }
+};
+
 window.TogetherBackend = {
-  client, auth, rowToItem, itemToRow, rowToLabel, labelToRow, newId, SUPABASE_URL,
+  client, auth, rowToItem, itemToRow, rowToLabel, labelToRow, newId, SUPABASE_URL, reportBug,
 };

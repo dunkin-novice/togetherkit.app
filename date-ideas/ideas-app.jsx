@@ -235,7 +235,7 @@ function useIdeasStore(homespaceId, me, members) {
     },
 
     onBugPhoto: (e) => readPhoto(e.target.files && e.target.files[0], (d) => patch({ bugImage: d })),
-    sendBug: () => { try { console.info('[Together] Bug report', { msg: ref.current.bugText, email: ref.current.bugEmail, feature: 'date-ideas' }); } catch (e) {} patch({ bugSent: true }); },
+    sendBug: () => { try { const s = ref.current; window.TogetherBackend.reportBug({ message: (s.bugText || '') + (s.bugEmail ? ' [' + s.bugEmail + ']' : ''), page: 'date-ideas', homespaceId, byUser: (meRef.current || {}).uid, byName: (meRef.current || {}).name }); } catch (e) {} patch({ bugSent: true }); },
   }), [client, homespaceId, BE]);
 
   return [state, actions];

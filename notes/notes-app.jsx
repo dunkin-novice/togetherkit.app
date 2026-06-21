@@ -109,7 +109,7 @@ function useNotesStore(homespaceId, me) {
     setEdit: (p) => patch(s => ({ edit: { ...s.edit, ...p } })),
     saveEdit: () => { const s = ref.current, e = s.edit, title = (e.title || '').trim(); if (!title && !(e.body || '').trim()) return; const upd = { title: title || 'Untitled', body: e.body, labelId: e.labelId || null }; patch(st => ({ editing: false, notes: st.notes.map(n => n.id === st.detailId ? { ...n, ...upd } : n) })); db(client.from('notes').update({ title: upd.title, body: upd.body || null, label_id: upd.labelId, updated_at: new Date().toISOString() }).eq('id', s.detailId)); },
     deleteDetail: () => { const id = ref.current.detailId; patch({ detailId: null, editing: false }); patch(s => ({ notes: s.notes.filter(n => n.id !== id) })); db(client.from('notes').delete().eq('id', id)); },
-    sendBug: () => { try { console.info('[Together] Bug report', { msg: ref.current.bugText, feature: 'notes' }); } catch (e) {} patch({ bugSent: true }); },
+    sendBug: () => { try { window.TogetherBackend.reportBug({ message: ref.current.bugText, page: 'notes', homespaceId, byUser: (meRef.current || {}).uid, byName: (meRef.current || {}).name }); } catch (e) {} patch({ bugSent: true }); },
   }), [client, homespaceId, BE]);
 
   return [state, actions];

@@ -106,7 +106,7 @@ function useWishStore(homespaceId, me) {
     setEdit: (p) => patch(s => ({ edit: { ...s.edit, ...p } })),
     saveEdit: () => { const s = ref.current, e = s.edit, title = (e.title || '').trim(); if (!title) return; patch(st => ({ editing: false, items: st.items.map(i => i.id === st.detailId ? { ...i, title, price: e.price, note: e.note, forWho: e.forWho, url: e.url } : i) })); db(client.from('wishlist').update({ title, price: e.price || null, note: e.note || null, for_who: e.forWho || null, url: e.url || null, updated_at: new Date().toISOString() }).eq('id', s.detailId)); },
     deleteDetail: () => { const id = ref.current.detailId; patch({ detailId: null, editing: false }); patch(s => ({ items: s.items.filter(i => i.id !== id) })); db(client.from('wishlist').delete().eq('id', id)); },
-    sendBug: () => { try { console.info('[Together] Bug', { feature: 'wishlist' }); } catch (e) {} patch({ bugSent: true }); },
+    sendBug: () => { try { window.TogetherBackend.reportBug({ message: ref.current.bugText, page: 'wishlist', homespaceId, byUser: (meRef.current || {}).uid, byName: (meRef.current || {}).name }); } catch (e) {} patch({ bugSent: true }); },
   }), [client, homespaceId, BE]);
   return [state, actions];
 }

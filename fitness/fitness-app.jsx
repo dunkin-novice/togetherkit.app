@@ -520,13 +520,19 @@ const selStyle = { border: '1px solid #ece6db', background: '#fff', borderRadius
 function RestTimer({ v, primary }) {
   const r = v.s.rest;
   const [, tick] = useState(0);
-  const doneRef = useRef(false);
   useEffect(() => { if (!r) return; const id = setInterval(() => tick(t => t + 1), 250); return () => clearInterval(id); }, [r && r.endsAt]);
+  const remMs = r ? Math.max(0, r.endsAt - Date.now()) : 0;
+  const done = !!r && remMs <= 0;
+  // fire the "done" chime + auto-dismiss exactly once, cleaned up if a new timer starts
+  useEffect(() => {
+    if (!done) return;
+    if (navigator.vibrate) { try { navigator.vibrate([120, 70, 120]); } catch (e) {} }
+    beep();
+    const id = setTimeout(() => v.a.stopRest(), 4000);
+    return () => clearTimeout(id);
+  }, [done, r && r.endsAt]);
   if (!r) return null;
-  const remMs = Math.max(0, r.endsAt - Date.now());
-  const done = remMs <= 0; const rem = Math.ceil(remMs / 1000);
-  if (done && !doneRef.current) { doneRef.current = true; if (navigator.vibrate) { try { navigator.vibrate([120, 70, 120]); } catch (e) {} } beep(); setTimeout(() => v.a.stopRest(), 4000); }
-  if (!done) doneRef.current = false;
+  const rem = Math.ceil(remMs / 1000);
   const mm = Math.floor(rem / 60), ss = rem % 60;
   return (
     <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 1500, background: done ? '#6f9c5a' : '#3a352f', color: '#fff', borderRadius: 999, boxShadow: '0 12px 30px rgba(58,53,47,.34)', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px 8px 16px', fontFamily: 'inherit' }}>
@@ -661,7 +667,7 @@ function CompareSection({ v }) {
       </div>
       <div style={card}>
         <span style={upper}>This week</span>
-        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>{people.map(p => <Big key={p.uid} p={p} />)}</div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>{people.map(p => <Big key={p.uid} p={p} />)}</div>
       </div>
       {c.muscleFocus && c.muscleFocus.length > 0 && (() => { const max = Math.max(...c.muscleFocus.map(x => x.total)); return (
         <div style={card}>
@@ -683,7 +689,7 @@ function CompareSection({ v }) {
         {rows.map(r => (
           <div key={r.exercise} style={{ ...card, padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ flex: 1, fontSize: 14, fontWeight: 800, color: '#3a352f' }}>{r.exercise}</span>
-            <div style={{ display: 'flex', gap: 7 }}>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {r.cells.map(c => { const p = people.find(x => x.uid === c.uid) || {}; return (
                 <span key={c.uid} title={p.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 800, color: c.win ? '#fff' : (c.weight == null ? '#c3bbae' : '#7a7166'), background: c.win ? (p.color || '#6f9c5a') : '#f2ece2', padding: '4px 9px', borderRadius: 9 }}>{c.win && '🏆'}<span style={{ width: 7, height: 7, borderRadius: '50%', background: c.win ? 'rgba(255,255,255,.8)' : (p.color || '#ccc') }} />{c.weight == null ? '–' : fmt(c.weight)}</span>
               ); })}

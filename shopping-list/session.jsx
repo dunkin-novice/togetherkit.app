@@ -63,7 +63,7 @@ function useTogetherSession() {
           if (params.get('invite')) { params.delete('invite'); const q = params.toString(); history.replaceState(null, '', location.pathname + (q ? '?' + q : '')); }
         }
         if (!hs) { try { hs = localStorage.getItem(HS_KEY); } catch (e) {} }
-        if (hs) { const chk = await client.from('members').select('homespace_id').eq('homespace_id', hs).maybeSingle(); if (!chk.data) hs = null; }
+        if (hs) { const chk = await client.from('members').select('homespace_id').eq('homespace_id', hs).eq('user_id', session.user.id).maybeSingle(); if (!chk.data) hs = null; }
         if (!hs) { const { data } = await client.rpc('ensure_home'); hs = data; }
         if (!alive) return;
         setHomespaceId(hs);
@@ -109,7 +109,6 @@ function useTogetherSession() {
     const ch = client.channel('hs:' + homespaceId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members', filter: 'homespace_id=eq.' + homespaceId }, () => { load(); reloadSpaces(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'homespaces', filter: 'id=eq.' + homespaceId }, () => { load(); reloadSpaces(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, load)
       .subscribe();
     return () => { alive = false; client.removeChannel(ch); };
   }, [homespaceId, session, client, reloadSpaces]);

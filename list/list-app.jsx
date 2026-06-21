@@ -16,8 +16,8 @@ const CTONE = {
 const CTONE_CYCLE = ['sand', 'purple', 'rose', 'teal', 'trip', 'green', 'dine'];
 const ctoneOf = (l) => CTONE[(l && l.tone) || 'sand'] || CTONE.sand;
 
-const rowToItem = (r) => ({ id: r.id, title: r.title || '', body: r.body || '', labelId: r.label_id, byUser: r.by_user, byName: r.by_name, date: r.date, done: !!r.done, important: !!r.important, pos: Number(r.pos) || 0 });
-const itemToRow = (it, hs) => ({ id: it.id, homespace_id: hs, list_id: LIST_ID, title: it.title, body: it.body || null, label_id: it.labelId || null, by_user: it.byUser, by_name: it.byName, date: it.date, done: !!it.done, important: !!it.important, pos: it.pos || 0 });
+const rowToCItem = (r) => ({ id: r.id, title: r.title || '', body: r.body || '', labelId: r.label_id, byUser: r.by_user, byName: r.by_name, date: r.date, done: !!r.done, important: !!r.important, pos: Number(r.pos) || 0 });
+const cItemToRow = (it, hs) => ({ id: it.id, homespace_id: hs, list_id: LIST_ID, title: it.title, body: it.body || null, label_id: it.labelId || null, by_user: it.byUser, by_name: it.byName, date: it.date, done: !!it.done, important: !!it.important, pos: it.pos || 0 });
 const rowToCL = (r) => ({ id: r.id, name: r.name, tone: r.tone, custom: !!r.custom, sort: r.sort });
 const clToRow = (l, hs, sort) => ({ homespace_id: hs, list_id: LIST_ID, id: l.id, name: l.name, tone: l.tone, custom: !!l.custom, sort: sort != null ? sort : (l.sort || 0) });
 
@@ -45,7 +45,7 @@ function useListStore(homespaceId, me) {
         client.from('custom_items').select('*').eq('homespace_id', homespaceId).eq('list_id', LIST_ID).order('pos', { ascending: false }),
       ]);
       if (!alive) return;
-      patch({ labels: (lr.data || []).map(rowToCL), items: (ir.data || []).map(rowToItem), syncing: false });
+      patch({ labels: (lr.data || []).map(rowToCL), items: (ir.data || []).map(rowToCItem), syncing: false });
     };
     refetch();
     const ch = client.channel('list:' + LIST_ID)
@@ -67,7 +67,7 @@ function useListStore(homespaceId, me) {
       const title = (d.title || '').trim(); if (!title && !(d.body || '').trim()) return;
       const it = { id: BE.newId(), title: title || 'Untitled', body: d.body, labelId: d.labelId || null, byUser: m.uid, byName: m.name, date: 'Today', done: false, important: d.important, pos: Date.now() };
       patch(st => ({ items: [it, ...st.items], draft: { title: '', body: '', labelId: d.labelId, important: false }, addOpen: false }));
-      db(client.from('custom_items').insert(itemToRow(it, homespaceId)));
+      db(client.from('custom_items').insert(cItemToRow(it, homespaceId)));
     },
     addLabel: () => {
       const s = ref.current, name = (s.newLabelName || '').trim(); if (!name) return;
@@ -88,7 +88,7 @@ function useListStore(homespaceId, me) {
     setEdit: (p) => patch(s => ({ edit: { ...s.edit, ...p } })),
     saveEdit: () => { const s = ref.current, e = s.edit, title = (e.title || '').trim(); if (!title && !(e.body || '').trim()) return; const upd = { title: title || 'Untitled', body: e.body, labelId: e.labelId || null }; patch(st => ({ editing: false, items: st.items.map(i => i.id === st.detailId ? { ...i, ...upd } : i) })); db(client.from('custom_items').update({ title: upd.title, body: upd.body || null, label_id: upd.labelId, updated_at: new Date().toISOString() }).eq('id', s.detailId)); },
     deleteDetail: () => { const id = ref.current.detailId; patch({ detailId: null, editing: false }); patch(s => ({ items: s.items.filter(i => i.id !== id) })); db(client.from('custom_items').delete().eq('id', id)); },
-    sendBug: () => { try { console.info('[Together] Bug', { feature: 'custom-list', list: LIST_ID }); } catch (e) {} patch({ bugSent: true }); },
+    sendBug: () => { try { window.TogetherBackend.reportBug({ message: ref.current.bugText, page: 'custom-list:' + LIST_ID, homespaceId, byUser: (meRef.current || {}).uid, byName: (meRef.current || {}).name }); } catch (e) {} patch({ bugSent: true }); },
   }), [client, homespaceId, BE]);
   return [state, actions];
 }
