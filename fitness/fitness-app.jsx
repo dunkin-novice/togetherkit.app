@@ -75,7 +75,7 @@ function useFitnessStore(homespaceId, me) {
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', photo: null, date: today(), advanced: false },
     photoCompare: false,
-    graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight', exLib: [],
+    graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight', exLib: [], fitGoal: 3,
   }));
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   const ref = useRef(state); ref.current = state;
@@ -92,14 +92,15 @@ function useFitnessStore(homespaceId, me) {
   useEffect(() => {
     if (!homespaceId) return; let alive = true; patch({ syncing: true });
     const refetch = async () => {
-      const [w, b, rt, rx] = await Promise.all([
+      const [w, b, rt, rx, hg] = await Promise.all([
         client.from('fitness_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('body_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('fitness_routines').select('*').eq('homespace_id', homespaceId).order('pos', { ascending: true }),
         client.from('fitness_reactions').select('*').eq('homespace_id', homespaceId),
+        client.from('homespaces').select('fit_goal').eq('id', homespaceId).maybeSingle(),
       ]);
       if (!alive) return;
-      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), reactions: (rx.data || []).map(r => ({ logId: r.log_id, userId: r.user_id, emoji: r.emoji, byName: r.by_name })), syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
+      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), reactions: (rx.data || []).map(r => ({ logId: r.log_id, userId: r.user_id, emoji: r.emoji, byName: r.by_name })), fitGoal: (hg.data && hg.data.fit_goal) || 3, syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
     };
     refetch();
     const ch = client.channel('fitness:' + homespaceId)
@@ -116,6 +117,7 @@ function useFitnessStore(homespaceId, me) {
     startRest: (sec) => patch({ rest: { endsAt: Date.now() + sec * 1000, total: sec } }),
     addRest: (sec) => patch(s => ({ rest: s.rest ? { ...s.rest, endsAt: s.rest.endsAt + sec * 1000, total: s.rest.total + sec } : { endsAt: Date.now() + sec * 1000, total: sec } })),
     stopRest: () => patch({ rest: null }),
+    setGoal: (n) => { const g = Math.max(1, Math.min(14, n)); patch({ fitGoal: g }); db(client.from('homespaces').update({ fit_goal: g }).eq('id', homespaceId)); },
     setBDraft: (p) => patch(s => ({ bDraft: { ...s.bDraft, ...p } })),
     // ── workout session builder (multi-exercise) ──
     setSession: (p) => patch(s => ({ wSession: { ...s.wSession, ...p } })),
@@ -332,6 +334,8 @@ function buildView(state, actions, opts) {
   let streak = 0, started = false, cur = weekStart(todayUTC);
   for (let k = 0; k < 104 && need.length > 0; k++) { const both = need.every(m => trainedInWeek(m.uid, cur)); if (both) { streak++; started = true; } else if (started) break; cur -= 7 * DAY; }
   const thisWeekBoth = need.length > 0 && need.every(m => trainedInWeek(m.uid, weekStart(todayUTC)));
+  const wkStart = weekStart(todayUTC);
+  const weekDays = comparePeople.map(p => { let n = 0; for (let i = 0; i < 7; i++) if (datesBy[p.uid] && datesBy[p.uid].has(dstr(wkStart + i * DAY))) n++; return { uid: p.uid, name: p.name, color: p.color, initial: p.initial, days: n }; });
   const consistency = comparePeople.map(p => ({ uid: p.uid, name: p.name, color: p.color, initial: p.initial, days: Array.from({ length: 21 }, (_, i) => ({ active: !!(datesBy[p.uid] && datesBy[p.uid].has(dstr(todayUTC - (20 - i) * DAY))) })) }));
   // weekly muscle-group focus (uses the bundled library's muscle data)
   const exMuscles = {}; (state.exLib || []).forEach(x => { exMuscles[x.name.toLowerCase()] = x.muscles || []; });
@@ -348,7 +352,7 @@ function buildView(state, actions, opts) {
     lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
     canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
-    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus },
+    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus, weekDays, goal: state.fitGoal },
     exSuggestions: (q) => {
       const t = (q || '').toLowerCase().trim();
       const lib = (state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' }));
@@ -623,6 +627,25 @@ function CompareSection({ v }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 19, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{c.streak > 0 ? c.streak + '-week streak together' : 'Start a streak together'}</div>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: '#9a9186', marginTop: 2 }}>{c.streak > 0 ? (c.thisWeekBoth ? 'Both trained this week — keep it alive ✨' : 'Both train once this week to keep it going') : 'Both train at least once this week to begin'}</div>
+        </div>
+      </div>
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+          <span style={upper}>Weekly goal</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <button onClick={() => v.a.setGoal(c.goal - 1)} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 26, borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1 }}>−</button>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#3a352f', minWidth: 64, textAlign: 'center' }}>{c.goal}× / week</span>
+            <button onClick={() => v.a.setGoal(c.goal + 1)} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 26, borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1 }}>+</button>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          {(c.weekDays || []).map(p => { const done = p.days >= c.goal; return (
+            <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <span style={{ width: 22, height: 22, borderRadius: '50%', background: p.color, color: '#fff', fontWeight: 800, fontSize: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{p.initial}</span>
+              <div style={{ flex: 1, height: 12, borderRadius: 6, background: '#efe9e0', overflow: 'hidden' }}><span style={{ display: 'block', width: Math.min(100, p.days / c.goal * 100) + '%', height: '100%', background: p.color }} /></div>
+              <span style={{ fontSize: 12, fontWeight: 800, color: done ? '#6f9c5a' : '#9a9186', width: 36, textAlign: 'right' }}>{done ? '✓ ' : ''}{p.days}/{c.goal}</span>
+            </div>
+          ); })}
         </div>
       </div>
       <div style={card}>
