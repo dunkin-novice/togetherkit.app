@@ -71,12 +71,19 @@ function useFitnessStore(homespaceId, me) {
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
-    graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight',
+    graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight', exLib: [],
   }));
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   const ref = useRef(state); ref.current = state;
   const meRef = useRef(me); meRef.current = me;
   const db = (p) => { Promise.resolve(p).then(r => { if (r && r.error) console.warn('[togetherkit/fitness]', r.error.message); }, e => console.warn('[togetherkit/fitness]', e)); };
+
+  // lazy-load the bundled exercise library (873 exercises) once
+  useEffect(() => {
+    let alive = true;
+    fetch('exercises.json').then(r => r.json()).then(data => { if (!alive) return; patch({ exLib: (data || []).map(x => ({ name: x.n, muscles: x.m || [], sub: [(x.m || [])[0], x.e].filter(Boolean).join(' · ') })) }); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (!homespaceId) return; let alive = true; patch({ syncing: true });
@@ -331,7 +338,21 @@ function buildView(state, actions, opts) {
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
     canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
     compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency },
-    exSuggestions: (q) => { const t = (q || '').toLowerCase().trim(); const base = t ? EXERCISES.filter(e => e.toLowerCase().includes(t)) : EXERCISES; return base.slice(0, 8); },
+    exSuggestions: (q) => {
+      const t = (q || '').toLowerCase().trim();
+      const lib = (state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' }));
+      if (!t) {
+        const mine = (me ? state.workouts.filter(w => w.byUser === me.uid) : []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+        const seen = new Set(), recents = [];
+        mine.forEach(w => { const k = w.exercise.toLowerCase(); if (!seen.has(k)) { seen.add(k); recents.push({ name: w.exercise, sub: 'recent' }); } });
+        const top = recents.slice(0, 6);
+        const fill = lib.filter(x => !seen.has(x.name.toLowerCase())).slice(0, Math.max(0, 8 - top.length));
+        return [...top, ...fill];
+      }
+      const matches = lib.filter(x => x.name.toLowerCase().includes(t));
+      matches.sort((a, b) => (a.name.toLowerCase().startsWith(t) ? 0 : 1) - (b.name.toLowerCase().startsWith(t) ? 0 : 1));
+      return matches.slice(0, 12);
+    },
   };
 }
 
@@ -356,7 +377,7 @@ function AddWorkout({ v, primary }) {
                   <input value={b.ex} onChange={(e) => v.a.setBlock(i, { ex: e.target.value })} onFocus={(e) => { v.a.set({ exFocusKey: i }); focusScroll(e); }} placeholder="Search exercise…" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 15.5, paddingRight: 34 }} />
                   {v.s.exFocusKey === i && sugg.length > 0 && (
                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 5, background: '#fff', border: '1px solid #ece6db', borderRadius: 13, boxShadow: '0 10px 26px rgba(58,53,47,.16)', zIndex: 6, maxHeight: 200, overflowY: 'auto', padding: 5 }}>
-                      {sugg.map(name => <button key={name} onMouseDown={(e) => { e.preventDefault(); v.a.pickExercise(i, name); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '9px 11px', borderRadius: 9, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}>{name}</button>)}
+                      {sugg.map(o => <button key={o.name} onMouseDown={(e) => { e.preventDefault(); v.a.pickExercise(i, o.name); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '9px 11px', borderRadius: 9, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}><span>{o.name}</span>{o.sub && <span style={{ fontSize: 11, fontWeight: 700, color: o.sub === 'recent' ? '#a8794f' : '#b3a99c', textTransform: 'capitalize', flexShrink: 0 }}>{o.sub}</span>}</button>)}
                     </div>
                   )}
                   {(() => { const lf = v.lastFor(b.ex); return lf ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#b3a99c', margin: '4px 2px 0' }}>Last time: {setsText(lf)} · {shortDate(lf.date)}</div> : null; })()}
@@ -539,7 +560,7 @@ function RoutineEditor({ v, primary }) {
                   <input value={r.ex} onChange={(e) => v.a.routineRowSet(j, { ex: e.target.value })} onFocus={(e) => { setFocus(j); focusScroll(e); }} placeholder="Exercise" style={{ ...fieldInput, fontSize: 14.5, padding: '10px 30px 10px 12px' }} />
                   {focus === j && sugg.length > 0 && (
                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: '1px solid #ece6db', borderRadius: 12, boxShadow: '0 10px 26px rgba(58,53,47,.16)', zIndex: 6, maxHeight: 180, overflowY: 'auto', padding: 5 }}>
-                      {sugg.map(name => <button key={name} onMouseDown={(e) => { e.preventDefault(); setFocus(null); v.a.routineRowSet(j, { ex: name }); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '8px 10px', borderRadius: 8, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}>{name}</button>)}
+                      {sugg.map(o => <button key={o.name} onMouseDown={(e) => { e.preventDefault(); setFocus(null); v.a.routineRowSet(j, { ex: o.name }); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '8px 10px', borderRadius: 8, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}><span>{o.name}</span>{o.sub && <span style={{ fontSize: 11, fontWeight: 700, color: o.sub === 'recent' ? '#a8794f' : '#b3a99c', textTransform: 'capitalize', flexShrink: 0 }}>{o.sub}</span>}</button>)}
                     </div>
                   )}
                 </div>
