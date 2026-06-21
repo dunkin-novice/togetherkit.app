@@ -34,6 +34,22 @@ const emptyRRow = (unit) => ({ ex: '', sets: '', reps: '', weight: '', unit: uni
 // heaviest weight in an entry (handles per-set detail / drop sets)
 const maxW = (w) => { if (w.setsDetail && w.setsDetail.length) { const ws = w.setsDetail.map(s => Number(s.weight)).filter(x => !isNaN(x)); return ws.length ? Math.max(...ws) : null; } return w.weight != null ? Number(w.weight) : null; };
 const emptyWBlock = (unit) => ({ ex: '', unit: unit || 'kg', mode: 'simple', sets: '', reps: '', weight: '', rows: [{ weight: '', reps: '', drop: false }] });
+// estimated 1-rep-max (Epley) — best set in an entry
+const e1rmOf = (w) => {
+  const calc = (wt, rp) => { const n = Number(wt); if (isNaN(n)) return null; const r = Number(rp); return n * (1 + (isNaN(r) ? 0 : r) / 30); };
+  if (w.setsDetail && w.setsDetail.length) { let best = null; w.setsDetail.forEach(s => { const e = calc(s.weight, s.reps); if (e != null && (best == null || e > best)) best = e; }); return best; }
+  return calc(maxW(w), w.reps);
+};
+const round1 = (n) => Math.round(n * 10) / 10;
+// plate calculator — weights per side given a barbell
+const PLATES_KG = [25, 20, 15, 10, 5, 2.5, 1.25], PLATES_LB = [45, 35, 25, 10, 5, 2.5];
+const platesText = (total, unit) => {
+  const bar = unit === 'lb' ? 45 : 20; let perSide = (Number(total) - bar) / 2;
+  if (isNaN(perSide) || perSide <= 0) return null;
+  const out = []; (unit === 'lb' ? PLATES_LB : PLATES_KG).forEach(p => { while (perSide + 1e-6 >= p) { out.push(p); perSide -= p; } });
+  if (perSide > 0.02 || !out.length) return null;
+  return out.join(' + ');
+};
 // summarise an entry for the list card
 const setsText = (w) => {
   if (w.setsDetail && w.setsDetail.length) return w.setsDetail.map(s => (s.weight != null ? s.weight : '–') + '×' + (s.reps != null ? s.reps : '–') + (s.drop ? ' drop' : '')).join(', ');
@@ -52,7 +68,7 @@ function useFitnessStore(homespaceId, me) {
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
-    graphExercise: '', bodyMetric: 'weight',
+    graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight',
   }));
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   const ref = useRef(state); ref.current = state;
@@ -85,6 +101,18 @@ function useFitnessStore(homespaceId, me) {
     // ── workout session builder (multi-exercise) ──
     setSession: (p) => patch(s => ({ wSession: { ...s.wSession, ...p } })),
     setBlock: (i, p) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, ...p } : b) } })),
+    // pick an exercise + prefill from the user's last session of it (if the block is empty)
+    pickExercise: (i, name) => {
+      const s = ref.current, m = meRef.current || {};
+      const mine = s.workouts.filter(w => w.byUser === m.uid && w.exercise === name);
+      const last = mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null;
+      patch(st => ({ exFocusKey: null, wSession: { ...st.wSession, blocks: st.wSession.blocks.map((b, k) => {
+        if (k !== i) return b;
+        const nb = { ...b, ex: name };
+        if (last && b.mode === 'simple' && b.weight === '' && b.reps === '' && b.sets === '') { nb.weight = last.weight == null ? '' : String(last.weight); nb.reps = last.reps == null ? '' : String(last.reps); nb.sets = last.sets == null ? '' : String(last.sets); nb.unit = last.unit || b.unit; }
+        return nb;
+      }) } }));
+    },
     addBlock: () => patch(s => ({ wSession: { ...s.wSession, blocks: [...s.wSession.blocks, emptyWBlock((s.wSession.blocks.slice(-1)[0] || {}).unit)] }, exFocusKey: s.wSession.blocks.length })),
     removeBlock: (i) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.length > 1 ? s.wSession.blocks.filter((_, k) => k !== i) : s.wSession.blocks } })),
     setRow: (i, j, p) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, rows: b.rows.map((r, rj) => rj === j ? { ...r, ...p } : r) } : b) } })),
@@ -229,10 +257,12 @@ function buildView(state, actions, opts) {
   const exercisesLogged = [...new Set(state.workouts.map(w => w.exercise))].sort();
   const ge = state.graphExercise && exercisesLogged.includes(state.graphExercise) ? state.graphExercise : (exercisesLogged[0] || '');
   // workout graph: per person, max weight per day for the selected exercise
+  const wMetric = state.workoutMetric || 'weight';
+  const wVal = (w) => wMetric === 'e1rm' ? e1rmOf(w) : maxW(w);
   const wSeriesMap = {};
-  state.workouts.filter(w => w.exercise === ge && maxW(w) != null).forEach(w => {
+  state.workouts.filter(w => w.exercise === ge && wVal(w) != null).forEach(w => {
     const k = w.byUser || 'x'; wSeriesMap[k] = wSeriesMap[k] || {};
-    const day = w.date; const v = maxW(w);
+    const day = w.date; const v = wVal(w);
     if (wSeriesMap[k][day] == null || v > wSeriesMap[k][day]) wSeriesMap[k][day] = v;
   });
   const wSeries = Object.keys(wSeriesMap).map(uid => ({ name: nameOf(uid), color: colorOf(uid), points: Object.keys(wSeriesMap[uid]).map(day => ({ t: ts(day), y: wSeriesMap[uid][day] })) }));
@@ -264,6 +294,9 @@ function buildView(state, actions, opts) {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
     workouts: workoutsByDate, body: bodyByDate,
+    workoutMetric: wMetric,
+    lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
+    bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
     canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
     compare: { people: comparePeople, prRows },
     exSuggestions: (q) => { const t = (q || '').toLowerCase().trim(); const base = t ? EXERCISES.filter(e => e.toLowerCase().includes(t)) : EXERCISES; return base.slice(0, 8); },
@@ -291,9 +324,10 @@ function AddWorkout({ v, primary }) {
                   <input value={b.ex} onChange={(e) => v.a.setBlock(i, { ex: e.target.value })} onFocus={(e) => { v.a.set({ exFocusKey: i }); focusScroll(e); }} placeholder="Search exercise…" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 15.5, paddingRight: 34 }} />
                   {v.s.exFocusKey === i && sugg.length > 0 && (
                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 5, background: '#fff', border: '1px solid #ece6db', borderRadius: 13, boxShadow: '0 10px 26px rgba(58,53,47,.16)', zIndex: 6, maxHeight: 200, overflowY: 'auto', padding: 5 }}>
-                      {sugg.map(name => <button key={name} onMouseDown={(e) => { e.preventDefault(); v.a.set({ exFocusKey: null }); v.a.setBlock(i, { ex: name }); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '9px 11px', borderRadius: 9, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}>{name}</button>)}
+                      {sugg.map(name => <button key={name} onMouseDown={(e) => { e.preventDefault(); v.a.pickExercise(i, name); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '9px 11px', borderRadius: 9, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}>{name}</button>)}
                     </div>
                   )}
+                  {(() => { const lf = v.lastFor(b.ex); return lf ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#b3a99c', margin: '4px 2px 0' }}>Last time: {setsText(lf)} · {shortDate(lf.date)}</div> : null; })()}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <button onClick={() => v.a.setBlock(i, { mode: b.mode === 'simple' ? 'detail' : 'simple' })} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', color: '#a8794f', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
@@ -303,11 +337,14 @@ function AddWorkout({ v, primary }) {
                   <UnitToggle b={b} i={i} />
                 </div>
                 {b.mode === 'simple' ? (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>SETS</div><input value={b.sets} onChange={(e) => v.a.setBlock(i, { sets: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="3" style={numIn} /></div>
-                    <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>REPS</div><input value={b.reps} onChange={(e) => v.a.setBlock(i, { reps: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="8" style={numIn} /></div>
-                    <div style={{ flex: 1.2 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>WEIGHT</div><input value={b.weight} onChange={(e) => v.a.setBlock(i, { weight: e.target.value })} onFocus={focusScroll} type="number" inputMode="decimal" placeholder="60" style={numIn} /></div>
-                  </div>
+                  <Fragment>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>SETS</div><input value={b.sets} onChange={(e) => v.a.setBlock(i, { sets: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="3" style={numIn} /></div>
+                      <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>REPS</div><input value={b.reps} onChange={(e) => v.a.setBlock(i, { reps: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="8" style={numIn} /></div>
+                      <div style={{ flex: 1.2 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>WEIGHT</div><input value={b.weight} onChange={(e) => v.a.setBlock(i, { weight: e.target.value })} onFocus={focusScroll} type="number" inputMode="decimal" placeholder="60" style={numIn} /></div>
+                    </div>
+                    {(() => { const pt = platesText(b.weight, b.unit); return pt ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#a8794f', margin: '-2px 2px 0' }}>🏋️ Per side: {pt}</div> : null; })()}
+                  </Fragment>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                     {b.rows.map((r, j) => (
@@ -539,10 +576,18 @@ function Board({ v, isDesktop, primary, partner }) {
             <button onClick={() => v.a.set({ routineModal: true })} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed #cbb9a2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#a8794f', fontWeight: 800, cursor: 'pointer' }}>☰ Routines</button>
           </div>
           <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
               <span style={upper}>Progress</span>
               {v.exercisesLogged.length > 0 && <div style={{ position: 'relative' }}><select value={v.graphExercise} onChange={(e) => v.a.set({ graphExercise: e.target.value })} style={selStyle}>{v.exercisesLogged.map(e => <option key={e} value={e}>{e}</option>)}</select><span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><FI.Chevron size={12} /></span></div>}
             </div>
+            {v.exercisesLogged.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 4, background: '#f2ece2', borderRadius: 9, padding: 3 }}>
+                  {[{ id: 'weight', label: 'Top weight' }, { id: 'e1rm', label: 'Est. 1RM' }].map(o => <button key={o.id} onClick={() => v.a.set({ workoutMetric: o.id })} style={{ border: 'none', borderRadius: 7, padding: '5px 11px', fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', background: v.workoutMetric === o.id ? '#fff' : 'transparent', color: v.workoutMetric === o.id ? '#3a352f' : '#9a9186' }}>{o.label}</button>)}
+                </div>
+                {v.bestE1rm(v.graphExercise) != null && <span style={{ fontSize: 12, fontWeight: 800, color: '#6f7d52', background: '#eef1e6', padding: '4px 10px', borderRadius: 999 }}>Best 1RM ≈ {v.bestE1rm(v.graphExercise)}</span>}
+              </div>
+            )}
             <LineChart series={v.wSeries} />
             {legend(v.wSeries)}
           </div>
