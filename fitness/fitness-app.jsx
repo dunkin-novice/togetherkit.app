@@ -39,7 +39,7 @@ function useFitnessStore(homespaceId, me) {
   const [state, setState] = useState(() => ({
     tab: 'workouts', workouts: [], body: [], syncing: true,
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
-    wEditId: null, wEdit: null,
+    wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', date: today(), advanced: false },
     graphExercise: '', bodyMetric: 'weight',
   }));
@@ -90,8 +90,24 @@ function useFitnessStore(homespaceId, me) {
         }
         return { id: BE.newId(), exercise: ex, weight: b.weight === '' ? null : Number(b.weight), unit: b.unit, reps: b.reps === '' ? null : Number(b.reps), sets: b.sets === '' ? null : Number(b.sets), setsDetail: null, date: sess.date, byUser: m.uid, byName: m.name };
       });
-      patch(st => ({ workouts: [...st.workouts, ...rows].sort((a, b) => (a.date < b.date ? -1 : 1)), wAddOpen: false, exFocusKey: null, graphExercise: st.graphExercise || rows[0].exercise, wSession: { date: today(), blocks: [emptyWBlock((sess.blocks.slice(-1)[0] || {}).unit)] } }));
+      // detect new personal records (heaviest ever for me on that exercise)
+      const myPrev = {}; s.workouts.filter(w => w.byUser === m.uid).forEach(w => { const mw = maxW(w); if (mw == null) return; if (myPrev[w.exercise] == null || mw > myPrev[w.exercise]) myPrev[w.exercise] = mw; });
+      const prHits = [];
+      rows.forEach(w => { const mw = maxW(w); if (mw != null && (myPrev[w.exercise] == null || mw > myPrev[w.exercise])) { prHits.push(w.exercise + ' ' + mw + w.unit); myPrev[w.exercise] = mw; } });
+      const toast = prHits.length ? ('🏆 New PR! ' + prHits.join(' · ')) : null;
+      patch(st => ({ workouts: [...st.workouts, ...rows].sort((a, b) => (a.date < b.date ? -1 : 1)), wAddOpen: false, exFocusKey: null, prToast: toast, graphExercise: st.graphExercise || rows[0].exercise, wSession: { date: today(), blocks: [emptyWBlock((sess.blocks.slice(-1)[0] || {}).unit)] } }));
+      if (toast) setTimeout(() => patch({ prToast: null }), 4000);
       rows.forEach(w => db(client.from('fitness_logs').insert({ id: w.id, homespace_id: homespaceId, exercise: w.exercise, weight: w.weight, unit: w.unit, reps: w.reps, sets: w.sets, sets_detail: w.setsDetail, log_date: w.date, by_user: w.byUser, by_name: w.byName, pos: Date.now() })));
+    },
+    repeatLast: () => {
+      const s = ref.current, m = meRef.current || { uid: null };
+      const mine = s.workouts.filter(w => w.byUser === m.uid);
+      if (!mine.length) return;
+      const lastDate = mine.reduce((a, w) => (w.date > a ? w.date : a), mine[0].date);
+      const blocks = mine.filter(w => w.date === lastDate).map(w => (w.setsDetail && w.setsDetail.length)
+        ? { ex: w.exercise, unit: w.unit, mode: 'detail', sets: '', reps: '', weight: '', rows: w.setsDetail.map(r => ({ weight: r.weight == null ? '' : String(r.weight), reps: r.reps == null ? '' : String(r.reps), drop: !!r.drop })) }
+        : { ex: w.exercise, unit: w.unit, mode: 'simple', sets: w.sets == null ? '' : String(w.sets), reps: w.reps == null ? '' : String(w.reps), weight: w.weight == null ? '' : String(w.weight), rows: [{ weight: '', reps: '', drop: false }] });
+      patch({ wSession: { date: today(), blocks: blocks.length ? blocks : [emptyWBlock('kg')] }, wAddOpen: true, exFocusKey: null });
     },
     startEditWorkout: (id) => { const w = ref.current.workouts.find(x => x.id === id); if (!w) return; patch({ wEditId: id, wEdit: { exercise: w.exercise, weight: w.weight == null ? '' : String(w.weight), unit: w.unit, reps: w.reps == null ? '' : String(w.reps), sets: w.sets == null ? '' : String(w.sets), date: w.date } }); },
     setEdit: (p) => patch(s => ({ wEdit: { ...s.wEdit, ...p } })),
@@ -157,7 +173,7 @@ function LineChart({ series, height }) {
 
 /* ── view-model ───────────────────────────────────────────────────────────── */
 function buildView(state, actions, opts) {
-  const { primary, partner, members = [] } = opts;
+  const { primary, partner, members = [], me = null } = opts;
   const memById = {}; members.forEach(m => { memById[m.uid] = m; });
   const colorOf = (uid) => { const m = memById[uid]; if (!m) return '#9a9186'; return m.idx === 0 ? primary : m.idx === 1 ? partner : '#9a9186'; };
   const nameOf = (uid, fallback) => (memById[uid] && memById[uid].name) || fallback || 'Someone';
@@ -181,7 +197,11 @@ function buildView(state, actions, opts) {
   state.body.forEach(b => { const v = b[metricField]; if (v == null) return; const k = b.byUser || 'x'; bSeriesMap[k] = bSeriesMap[k] || []; bSeriesMap[k].push({ t: ts(b.date), y: Number(v) }); });
   const bSeries = Object.keys(bSeriesMap).map(uid => ({ name: nameOf(uid), color: colorOf(uid), points: bSeriesMap[uid] }));
 
-  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), edit: () => actions.startEditWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
+  // PR = heaviest entry per person+exercise (earliest one on a tie)
+  const bestKey = {};
+  state.workouts.forEach(w => { const mw = maxW(w); if (mw == null) return; const k = (w.byUser || 'x') + '|' + w.exercise; const cur = bestKey[k]; if (!cur || mw > cur.w || (mw === cur.w && w.date < cur.date)) bestKey[k] = { id: w.id, w: mw, date: w.date }; });
+  const prIds = new Set(Object.keys(bestKey).map(k => bestKey[k].id));
+  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), isPR: prIds.has(w.id), edit: () => actions.startEditWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
   const bodyByDate = state.body.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(b => ({ ...b, color: colorOf(b.byUser), initial: initialOf(b.byUser, b.byName), who: nameOf(b.byUser, b.byName), remove: () => actions.removeBody(b.id) }));
 
   // ── her-vs-you comparison ──
@@ -198,6 +218,7 @@ function buildView(state, actions, opts) {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
     workouts: workoutsByDate, body: bodyByDate,
+    canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
     compare: { people: comparePeople, prRows },
     exSuggestions: (q) => { const t = (q || '').toLowerCase().trim(); const base = t ? EXERCISES.filter(e => e.toLowerCase().includes(t)) : EXERCISES; return base.slice(0, 8); },
   };
@@ -404,11 +425,14 @@ function Board({ v, isDesktop, primary, partner }) {
             {legend(v.wSeries)}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            <span style={upper}>{v.workouts.length} set{v.workouts.length === 1 ? '' : 's'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <span style={upper}>{v.workouts.length} set{v.workouts.length === 1 ? '' : 's'}</span>
+              {v.canRepeat && <button onClick={v.a.repeatLast} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 10, padding: '7px 12px', fontSize: 12.5, fontFamily: 'inherit', color: '#7a7166', fontWeight: 800, cursor: 'pointer' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></svg>Repeat last</button>}
+            </div>
             {v.workouts.map(w => (
               <div key={w.id} onClick={w.edit} style={{ ...card, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{w.exercise}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 15, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{w.exercise}</span>{w.isPR && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 7px', borderRadius: 999 }}>🏆 PR</span>}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
                 </div>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={w.color} initial={w.initial} />{shortDate(w.date)}</span>
@@ -466,10 +490,11 @@ function BoardShell({ sx }) {
   const isDesktop = useIsDesktop();
   useEffect(() => { document.documentElement.style.setProperty('--primary', primary); document.documentElement.style.setProperty('--partner', partner); }, [primary, partner]);
   const [state, actions] = useFitnessStore(sx.homespaceId, sx.me);
-  const v = buildView(state, actions, { primary, partner, members: sx.members });
+  const v = buildView(state, actions, { primary, partner, members: sx.members, me: sx.me });
   return (
     <div className="app">
       <div className="app-shell"><Board v={v} isDesktop={isDesktop} primary={primary} partner={partner} /></div>
+      {v.s.prToast && <div style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 1500, background: '#3a352f', color: '#fff', fontWeight: 800, fontSize: 14, padding: '11px 18px', borderRadius: 999, boxShadow: '0 10px 30px rgba(58,53,47,.3)', animation: 'tog-pop .2s ease', maxWidth: '90vw', textAlign: 'center' }}>{v.s.prToast}</div>}
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
