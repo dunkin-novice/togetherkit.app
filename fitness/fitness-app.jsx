@@ -57,15 +57,22 @@ const LB_METRICS = [
   { key: 'relStrength', label: 'Strength', sub: 'best 1RM ÷ bodyweight', fmt: (v) => v == null ? '—' : v + '×' },
   { key: 'fatImprov', label: 'Fat lost', sub: 'since first log', fmt: (v) => v == null ? '—' : (v > 0 ? '−' + v : (v < 0 ? '+' + (-v) : '0')) + '%' },
 ];
-const PRESET_GROUP = { 'Bench Press': 'Chest', 'Incline Bench Press': 'Chest', 'Dumbbell Press': 'Chest', 'Chest Fly': 'Chest', 'Push-up': 'Chest', 'Cable Crossover': 'Chest', 'Deadlift': 'Back', 'Romanian Deadlift': 'Legs', 'Pull-up': 'Back', 'Lat Pulldown': 'Back', 'Barbell Row': 'Back', 'Seated Row': 'Back', 'Face Pull': 'Back', 'Squat': 'Legs', 'Front Squat': 'Legs', 'Leg Press': 'Legs', 'Lunge': 'Legs', 'Leg Curl': 'Legs', 'Leg Extension': 'Legs', 'Calf Raise': 'Legs', 'Hip Thrust': 'Legs', 'Glute Bridge': 'Legs', 'Overhead Press': 'Shoulders', 'Lateral Raise': 'Shoulders', 'Front Raise': 'Shoulders', 'Arnold Press': 'Shoulders', 'Shrug': 'Shoulders', 'Bicep Curl': 'Arms', 'Hammer Curl': 'Arms', 'Preacher Curl': 'Arms', 'Tricep Extension': 'Arms', 'Tricep Pushdown': 'Arms', 'Dip': 'Arms', 'Plank': 'Core', 'Crunch': 'Core', 'Leg Raise': 'Core', 'Russian Twist': 'Core', 'Cable Crunch': 'Core' };
+const PRESET_GROUP = {
+  'Bench Press': 'Chest', 'Incline Bench Press': 'Chest', 'Decline Bench Press': 'Chest', 'Dumbbell Press': 'Chest', 'Chest Fly': 'Chest', 'Dumbbell Fly': 'Chest', 'Cable Crossover': 'Chest', 'Machine Chest Press': 'Chest', 'Pec Deck': 'Chest', 'Push-up': 'Chest',
+  'Deadlift': 'Back', 'Sumo Deadlift': 'Back', 'Rack Pull': 'Back', 'Pull-up': 'Back', 'Chin-up': 'Back', 'Lat Pulldown': 'Back', 'Straight-Arm Pulldown': 'Back', 'Barbell Row': 'Back', 'Dumbbell Row': 'Back', 'T-Bar Row': 'Back', 'Seated Row': 'Back', 'Face Pull': 'Back', 'Back Extension': 'Back', "Farmer's Walk": 'Back',
+  'Romanian Deadlift': 'Legs', 'Squat': 'Legs', 'Front Squat': 'Legs', 'Goblet Squat': 'Legs', 'Hack Squat': 'Legs', 'Bulgarian Split Squat': 'Legs', 'Leg Press': 'Legs', 'Lunge': 'Legs', 'Step-up': 'Legs', 'Leg Curl': 'Legs', 'Leg Extension': 'Legs', 'Hip Thrust': 'Legs', 'Glute Bridge': 'Legs', 'Hip Adduction': 'Legs', 'Hip Abduction': 'Legs', 'Calf Raise': 'Legs', 'Seated Calf Raise': 'Legs', 'Power Clean': 'Legs', 'Clean and Jerk': 'Legs', 'Snatch': 'Legs', 'Thruster': 'Legs', 'Kettlebell Swing': 'Legs', 'Box Jump': 'Legs',
+  'Overhead Press': 'Shoulders', 'Dumbbell Shoulder Press': 'Shoulders', 'Arnold Press': 'Shoulders', 'Lateral Raise': 'Shoulders', 'Cable Lateral Raise': 'Shoulders', 'Front Raise': 'Shoulders', 'Rear Delt Fly': 'Shoulders', 'Upright Row': 'Shoulders', 'Shrug': 'Shoulders',
+  'Bicep Curl': 'Arms', 'Hammer Curl': 'Arms', 'Preacher Curl': 'Arms', 'Concentration Curl': 'Arms', 'Cable Curl': 'Arms', 'Tricep Extension': 'Arms', 'Overhead Tricep Extension': 'Arms', 'Tricep Pushdown': 'Arms', 'Skullcrusher': 'Arms', 'Close-Grip Bench Press': 'Arms', 'Dip': 'Arms', 'Wrist Curl': 'Arms',
+  'Plank': 'Core', 'Side Plank': 'Core', 'Crunch': 'Core', 'Bicycle Crunch': 'Core', 'Cable Crunch': 'Core', 'Sit-up': 'Core', 'Leg Raise': 'Core', 'Hanging Leg Raise': 'Core', 'Russian Twist': 'Core', 'Ab Wheel': 'Core', 'Mountain Climber': 'Core', 'Cable Woodchop': 'Core', 'Dead Bug': 'Core', 'Burpee': 'Core',
+};
 const EXERCISES = [
-  'Bench Press', 'Incline Bench Press', 'Dumbbell Press', 'Chest Fly', 'Push-up', 'Cable Crossover',
-  'Deadlift', 'Romanian Deadlift', 'Pull-up', 'Lat Pulldown', 'Barbell Row', 'Seated Row', 'Face Pull',
-  'Squat', 'Front Squat', 'Leg Press', 'Lunge', 'Leg Curl', 'Leg Extension', 'Calf Raise', 'Hip Thrust', 'Glute Bridge',
-  'Overhead Press', 'Lateral Raise', 'Front Raise', 'Arnold Press', 'Shrug',
-  'Bicep Curl', 'Hammer Curl', 'Preacher Curl', 'Tricep Extension', 'Tricep Pushdown', 'Dip',
-  'Plank', 'Crunch', 'Leg Raise', 'Russian Twist', 'Cable Crunch',
-  'Treadmill', 'Cycling', 'Rowing', 'Elliptical',
+  'Bench Press', 'Incline Bench Press', 'Decline Bench Press', 'Dumbbell Press', 'Chest Fly', 'Dumbbell Fly', 'Cable Crossover', 'Machine Chest Press', 'Pec Deck', 'Push-up',
+  'Deadlift', 'Sumo Deadlift', 'Romanian Deadlift', 'Rack Pull', 'Pull-up', 'Chin-up', 'Lat Pulldown', 'Straight-Arm Pulldown', 'Barbell Row', 'Dumbbell Row', 'T-Bar Row', 'Seated Row', 'Face Pull', 'Back Extension',
+  'Squat', 'Front Squat', 'Goblet Squat', 'Hack Squat', 'Bulgarian Split Squat', 'Leg Press', 'Lunge', 'Step-up', 'Leg Curl', 'Leg Extension', 'Hip Thrust', 'Glute Bridge', 'Hip Adduction', 'Hip Abduction', 'Calf Raise', 'Seated Calf Raise',
+  'Overhead Press', 'Dumbbell Shoulder Press', 'Arnold Press', 'Lateral Raise', 'Cable Lateral Raise', 'Front Raise', 'Rear Delt Fly', 'Upright Row', 'Shrug',
+  'Bicep Curl', 'Hammer Curl', 'Preacher Curl', 'Concentration Curl', 'Cable Curl', 'Tricep Extension', 'Overhead Tricep Extension', 'Tricep Pushdown', 'Skullcrusher', 'Close-Grip Bench Press', 'Dip', 'Wrist Curl',
+  'Plank', 'Side Plank', 'Crunch', 'Bicycle Crunch', 'Cable Crunch', 'Sit-up', 'Leg Raise', 'Hanging Leg Raise', 'Russian Twist', 'Ab Wheel', 'Mountain Climber', 'Cable Woodchop', 'Dead Bug',
+  'Power Clean', 'Clean and Jerk', 'Snatch', 'Thruster', 'Kettlebell Swing', "Farmer's Walk", 'Box Jump', 'Burpee',
 ];
 const STARTERS = [
   { name: 'Chest Day', exercises: [{ ex: 'Bench Press', sets: 4, reps: 8 }, { ex: 'Incline Bench Press', sets: 3, reps: 10 }, { ex: 'Chest Fly', sets: 3, reps: 12 }, { ex: 'Dip', sets: 3, reps: 10 }, { ex: 'Push-up', sets: 3, reps: 15 }] },
@@ -526,8 +533,8 @@ function buildView(state, actions, opts) {
     exSuggestions: (q) => {
       const t = (q || '').toLowerCase().trim();
       const acts = ACTIVITIES.map(a => ({ name: a.name, sub: a.cat.toLowerCase(), kind: 'cardio' })).concat(CLIMB_ACTIVITIES.map(n => ({ name: n, sub: 'climbing', kind: 'climb' }))).concat(HYROX_STATIONS.map(n => ({ name: n, sub: 'hyrox', kind: HYROX_CARDIO[n] ? 'cardio' : 'lifting' })));
-      const seenN = new Set(); // activities/HYROX entries win over duplicate library names
-      const lib = acts.concat((state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' }))).filter(x => { const k = x.name.toLowerCase(); if (seenN.has(k)) return false; seenN.add(k); return true; });
+      const seenN = new Set(); // priority: activities/HYROX → full library (keeps muscle subtitle) → curated presets (fill gaps)
+      const lib = acts.concat((state.exLib && state.exLib.length) ? state.exLib : []).concat(EXERCISES.map(n => ({ name: n, sub: '' }))).filter(x => { const k = x.name.toLowerCase(); if (seenN.has(k)) return false; seenN.add(k); return true; });
       if (!t) {
         const mine = (me ? state.workouts.filter(w => w.byUser === me.uid) : []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
         const seen = new Set(), recents = [];
