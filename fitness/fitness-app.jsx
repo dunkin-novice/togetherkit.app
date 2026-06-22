@@ -351,7 +351,16 @@ function buildView(state, actions, opts) {
   const prIds = new Set(Object.keys(bestKey).map(k => bestKey[k].id));
   const reactsByLog = {}; state.reactions.forEach(r => { (reactsByLog[r.logId] = reactsByLog[r.logId] || []).push(r); });
   const groupReacts = (logId) => { const rs = reactsByLog[logId] || []; const by = {}; rs.forEach(r => { by[r.emoji] = by[r.emoji] || { emoji: r.emoji, count: 0, mine: false, names: [] }; by[r.emoji].count++; if (me && r.userId === me.uid) by[r.emoji].mine = true; by[r.emoji].names.push(r.byName); }); return Object.keys(by).map(e => by[e]); };
-  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), isPR: prIds.has(w.id), reactions: groupReacts(w.id), mine: !!(me && w.byUser === me.uid), react: (emoji) => actions.toggleReaction(w.id, emoji), edit: () => actions.startEditWorkout(w.id), duplicate: () => actions.duplicateWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
+  // bodyweight for a user (profile weight → latest body log → none) for calorie estimates
+  const weightForUser = (uid) => {
+    const p = state.fitProfiles[uid];
+    if (p && p.weight_kg) return Number(p.weight_kg);
+    const bw = state.body.filter(b => b.byUser === uid && b.weight != null).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    if (bw) return bw.unit === 'lb' ? Number(bw.weight) * 0.453592 : Number(bw.weight);
+    return null;
+  };
+  const calOf = (w) => { if (w.kind !== 'cardio' || w.durationMin == null) return null; const kg = weightForUser(w.byUser); if (!kg) return null; return Math.round(metFor(w.exercise, w.intensity || 'moderate') * kg * (w.durationMin / 60)); };
+  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), cal: calOf(w), isPR: prIds.has(w.id), reactions: groupReacts(w.id), mine: !!(me && w.byUser === me.uid), react: (emoji) => actions.toggleReaction(w.id, emoji), edit: () => actions.startEditWorkout(w.id), duplicate: () => actions.duplicateWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
   const bodyByDate = state.body.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(b => ({ ...b, color: colorOf(b.byUser), initial: initialOf(b.byUser, b.byName), who: nameOf(b.byUser, b.byName), remove: () => actions.removeBody(b.id) }));
 
   // ── her-vs-you comparison ──
@@ -403,7 +412,7 @@ function buildView(state, actions, opts) {
     else if (groups.length <= 3) title = groups.slice(0, 2).join(' & ');
     else title = 'Full Body';
     const isPR = s.items.some(w => w.isPR);
-    return { ...s, title, isPR, count: s.items.length, volume: Math.round(s.items.reduce((a, w) => a + itemVol(w), 0)), preview: s.items.map(w => w.exercise).join(' · ') };
+    return { ...s, title, isPR, count: s.items.length, volume: Math.round(s.items.reduce((a, w) => a + itemVol(w), 0)), kcal: s.items.reduce((a, w) => a + (w.cal || 0), 0), preview: s.items.map(w => w.exercise).join(' · ') };
   });
   return {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
@@ -864,7 +873,7 @@ function SessionsView({ v }) {
                   <span style={{ fontSize: 16, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{s.title}</span>
                   {s.isPR && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 7px', borderRadius: 999 }}>🏆 PR</span>}
                 </div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186', marginTop: 2 }}>{s.count} exercise{s.count === 1 ? '' : 's'}{s.volume > 0 ? ' · ' + s.volume.toLocaleString() + ' vol' : ''}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186', marginTop: 2 }}>{s.count} exercise{s.count === 1 ? '' : 's'}{s.volume > 0 ? ' · ' + s.volume.toLocaleString() + ' vol' : ''}{s.kcal > 0 ? ' · 🔥 ' + s.kcal.toLocaleString() + ' kcal' : ''}</div>
               </div>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186', flexShrink: 0 }}><Avi color={s.color} initial={s.initial} />{shortDate(s.date)}</span>
             </div>
@@ -877,7 +886,7 @@ function SessionsView({ v }) {
         <Overlay onClose={() => v.a.set({ sessionOpen: null })}>
           <Sheet stop={v.stop} maxWidth={420}>
             <div style={{ padding: '20px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-              <div><h2 style={modalTitle}>{open.title}</h2><div style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186', marginTop: 3 }}>{open.who} · {shortDate(open.date)} · {open.count} exercise{open.count === 1 ? '' : 's'}{open.volume > 0 ? ' · ' + open.volume.toLocaleString() + ' vol' : ''}</div></div>
+              <div><h2 style={modalTitle}>{open.title}</h2><div style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186', marginTop: 3 }}>{open.who} · {shortDate(open.date)} · {open.count} exercise{open.count === 1 ? '' : 's'}{open.volume > 0 ? ' · ' + open.volume.toLocaleString() + ' vol' : ''}{open.kcal > 0 ? ' · 🔥 ' + open.kcal.toLocaleString() + ' kcal' : ''}</div></div>
               <button onClick={() => v.a.set({ sessionOpen: null })} aria-label="Close" style={closeX}>×</button>
             </div>
             <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px 22px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -885,7 +894,7 @@ function SessionsView({ v }) {
                 <div key={w.id} style={{ background: '#fff', border: '1px solid #f0ebe2', borderRadius: 13, padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 14.5, fontWeight: 800, color: '#3a352f' }}>{w.exercise}</span>{w.isPR && <span style={{ fontSize: 10, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 6px', borderRadius: 999 }}>🏆</span>}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}{w.cal ? ' · 🔥 ≈' + w.cal + ' kcal' : ''}</div>
                   </div>
                 </div>
               ))}
@@ -944,7 +953,7 @@ function Board({ v, isDesktop, primary, partner }) {
                 <div onClick={w.edit} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 15, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{w.exercise}</span>{w.isPR && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 7px', borderRadius: 999 }}>🏆 PR</span>}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}{w.cal ? ' · 🔥 ≈' + w.cal + ' kcal' : ''}</div>
                   </div>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={w.color} initial={w.initial} />{shortDate(w.date)}</span>
                   <button onClick={(ev) => { ev.stopPropagation(); w.duplicate(); }} title="Duplicate to today" aria-label="Duplicate to today" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 8, lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
