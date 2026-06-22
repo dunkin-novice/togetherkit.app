@@ -20,6 +20,14 @@ const ACTIVITY_MET = { Running: { low: 8.3, moderate: 9.8, high: 11.8 }, Cycling
 const metFor = (name, intensity) => { const m = ACTIVITY_MET[name]; if (!m) return 6; return m[intensity] || m.moderate || 6; };
 const INTENSITY = [{ k: 'low', l: 'Low', d: 'Casual / easy pace' }, { k: 'moderate', l: 'Moderate', d: 'Steady, breaking a sweat' }, { k: 'high', l: 'High', d: 'Hard / competitive' }];
 const intensityDesc = (k) => (INTENSITY.find(i => i.k === k) || INTENSITY[1]).d;
+// leaderboard metrics — all "higher is better"; designed so a lighter partner can still win
+const LB_METRICS = [
+  { key: 'volumeWeek', label: 'Volume', sub: 'this week', fmt: (v) => v ? v.toLocaleString() + ' kg' : '0' },
+  { key: 'sessionsWeek', label: 'Sessions', sub: 'this week', fmt: (v) => (v || 0) + '×' },
+  { key: 'kcalWeek', label: 'Calories', sub: 'this week', fmt: (v) => '🔥 ' + (v || 0).toLocaleString() },
+  { key: 'relStrength', label: 'Strength', sub: 'best 1RM ÷ bodyweight', fmt: (v) => v == null ? '—' : v + '×' },
+  { key: 'fatImprov', label: 'Fat lost', sub: 'since first log', fmt: (v) => v == null ? '—' : (v > 0 ? '−' + v : (v < 0 ? '+' + (-v) : '0')) + '%' },
+];
 const PRESET_GROUP = { 'Bench Press': 'Chest', 'Incline Bench Press': 'Chest', 'Dumbbell Press': 'Chest', 'Chest Fly': 'Chest', 'Push-up': 'Chest', 'Cable Crossover': 'Chest', 'Deadlift': 'Back', 'Romanian Deadlift': 'Legs', 'Pull-up': 'Back', 'Lat Pulldown': 'Back', 'Barbell Row': 'Back', 'Seated Row': 'Back', 'Face Pull': 'Back', 'Squat': 'Legs', 'Front Squat': 'Legs', 'Leg Press': 'Legs', 'Lunge': 'Legs', 'Leg Curl': 'Legs', 'Leg Extension': 'Legs', 'Calf Raise': 'Legs', 'Hip Thrust': 'Legs', 'Glute Bridge': 'Legs', 'Overhead Press': 'Shoulders', 'Lateral Raise': 'Shoulders', 'Front Raise': 'Shoulders', 'Arnold Press': 'Shoulders', 'Shrug': 'Shoulders', 'Bicep Curl': 'Arms', 'Hammer Curl': 'Arms', 'Preacher Curl': 'Arms', 'Tricep Extension': 'Arms', 'Tricep Pushdown': 'Arms', 'Dip': 'Arms', 'Plank': 'Core', 'Crunch': 'Core', 'Leg Raise': 'Core', 'Russian Twist': 'Core', 'Cable Crunch': 'Core' };
 const EXERCISES = [
   'Bench Press', 'Incline Bench Press', 'Dumbbell Press', 'Chest Fly', 'Push-up', 'Cable Crossover',
@@ -94,6 +102,7 @@ function useFitnessStore(homespaceId, me) {
     photoCompare: false,
     graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight', exLib: [], fitGoal: 3,
     fitProfiles: {}, fpEditOpen: false, fpDraft: { height_cm: '', weight_kg: '', birth_year: '', sex: '', stats_visible: true },
+    lbOpen: false, lbMetric: 'volumeWeek',
   }));
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   const ref = useRef(state); ref.current = state;
@@ -414,6 +423,23 @@ function buildView(state, actions, opts) {
     const isPR = s.items.some(w => w.isPR);
     return { ...s, title, isPR, count: s.items.length, volume: Math.round(s.items.reduce((a, w) => a + itemVol(w), 0)), kcal: s.items.reduce((a, w) => a + (w.cal || 0), 0), preview: s.items.map(w => w.exercise).join(' · ') };
   });
+  // ── leaderboard metrics per member ──
+  const lbMembers = comparePeople.map(p => {
+    const mine = state.workouts.filter(w => w.byUser === p.uid);
+    const wk = mine.filter(w => ts(w.date) >= wkStart);
+    const kg = weightForUser(p.uid);
+    const e1rms = mine.map(e1rmOf).filter(x => x != null);
+    const e1rmMax = e1rms.length ? Math.max(...e1rms) : 0;
+    const fats = state.body.filter(b => b.byUser === p.uid && b.bodyFat != null).sort((a, b) => (a.date < b.date ? -1 : 1));
+    return {
+      uid: p.uid, name: p.name, color: p.color, initial: p.initial,
+      volumeWeek: Math.round(wk.reduce((a, w) => a + itemVol(w), 0)),
+      kcalWeek: wk.reduce((a, w) => a + (calOf(w) || 0), 0),
+      sessionsWeek: ((weekDays.find(d => d.uid === p.uid) || {}).days) || 0,
+      relStrength: (kg && e1rmMax > 0) ? Math.round((e1rmMax / kg) * 100) / 100 : null,
+      fatImprov: fats.length >= 2 ? Math.round((fats[0].bodyFat - fats[fats.length - 1].bodyFat) * 10) / 10 : null,
+    };
+  });
   return {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
@@ -423,7 +449,7 @@ function buildView(state, actions, opts) {
     lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
     canRepeat: !!(me && state.workouts.some(w => w.byUser === me.uid)),
-    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus, weekDays, goal: state.fitGoal },
+    compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus, weekDays, goal: state.fitGoal, leaderboard: lbMembers },
     exSuggestions: (q) => {
       const t = (q || '').toLowerCase().trim();
       const acts = ACTIVITIES.map(a => ({ name: a.name, sub: a.cat.toLowerCase(), kind: 'cardio' }));
@@ -733,6 +759,36 @@ function RoutineEditor({ v, primary }) {
     </Overlay>
   );
 }
+function LeaderboardModal({ v }) {
+  const c = v.compare; const metricKey = v.s.lbMetric || 'volumeWeek';
+  const meta = LB_METRICS.find(m => m.key === metricKey) || LB_METRICS[0];
+  const rows = (c.leaderboard || []).slice().sort((a, b) => { const av = a[metricKey], bv = b[metricKey]; if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; return bv - av; });
+  const medal = ['🥇', '🥈', '🥉'];
+  const topVal = rows.length && rows[0][metricKey] != null ? rows[0][metricKey] : null;
+  return (
+    <Overlay onClose={() => v.a.set({ lbOpen: false })} z={1300}>
+      <Sheet stop={v.stop} maxWidth={420}>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>🏆 Leaderboard</h2><button onClick={() => v.a.set({ lbOpen: false })} aria-label="Close" style={closeX}>×</button></div>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '0 22px 10px' }}>
+          {LB_METRICS.map(m => { const on = m.key === metricKey; return <button key={m.key} onClick={() => v.a.set({ lbMetric: m.key })} style={{ flexShrink: 0, border: '1px solid ' + (on ? '#3a352f' : '#e6ded2'), background: on ? '#3a352f' : '#fff', color: on ? '#fff' : '#7a7166', borderRadius: 999, padding: '7px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{m.label}</button>; })}
+        </div>
+        <div style={{ padding: '0 22px 6px', fontSize: 12, fontWeight: 700, color: '#b3a99c' }}>{meta.sub}</div>
+        <div className="tog-scroll" style={{ overflowY: 'auto', padding: '4px 22px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rows.map((p, i) => { const val = p[metricKey]; const lead = i === 0 && val != null && val > 0; return (
+            <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: 12, background: lead ? 'linear-gradient(135deg,#fbf3e6,#fff)' : '#fff', border: '1px solid ' + (lead ? '#ecd9b0' : '#f0ebe2'), borderRadius: 14, padding: '12px 14px' }}>
+              <span style={{ fontSize: 17, fontWeight: 800, color: '#9a9186', width: 24, textAlign: 'center' }}>{medal[i] || (i + 1)}</span>
+              <span style={{ width: 30, height: 30, borderRadius: '50%', background: p.color, color: '#fff', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{p.initial}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 800, color: '#3a352f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: lead ? '#a8822f' : '#7a7166', flexShrink: 0 }}>{meta.fmt(val)}</span>
+            </div>
+          ); })}
+          {rows.length === 0 && <div style={{ textAlign: 'center', padding: '24px 10px', color: '#b3a99c', fontWeight: 600 }}>No one in this space yet.</div>}
+        </div>
+        <div style={{ padding: '0 22px 22px', fontSize: 11.5, fontWeight: 600, color: '#b3a99c', lineHeight: 1.5 }}>Pick a metric you both care about. “Strength” is your best lift ÷ your bodyweight and “Fat lost” counts progress from your own start — so the lighter or smaller partner can still top the board. 💛</div>
+      </Sheet>
+    </Overlay>
+  );
+}
 function CompareSection({ v }) {
   const people = v.compare.people, rows = v.compare.prRows;
   const fmt = (n) => Math.round(n * 10) / 10;
@@ -748,6 +804,8 @@ function CompareSection({ v }) {
   const c = v.compare;
   return (
     <Fragment>
+      <button onClick={() => v.a.set({ lbOpen: true })} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, width: '100%', background: '#3a352f', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>🏆 Leaderboard</button>
+      {v.s.lbOpen && <LeaderboardModal v={v} />}
       <div style={{ ...card, background: c.streak > 0 ? 'linear-gradient(135deg,#fbf3e6,#f3ece1)' : '#fff', display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{ fontSize: 34, lineHeight: 1 }}>{c.streak > 0 ? '🔥' : '🤝'}</div>
         <div style={{ flex: 1 }}>
