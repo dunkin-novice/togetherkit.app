@@ -285,12 +285,27 @@ function useFitnessStore(homespaceId, me) {
       patch(st => ({ routines: [...st.routines, { id, name, exercises, byUser: m.uid, byName: m.name }] }));
       db(client.from('fitness_routines').insert({ id, homespace_id: homespaceId, name, exercises, by_user: m.uid, by_name: m.name, pos: Date.now() }));
     },
-    startEditWorkout: (id) => { const w = ref.current.workouts.find(x => x.id === id); if (!w) return; patch({ wEditId: id, wEdit: { exercise: w.exercise, weight: w.weight == null ? '' : String(w.weight), unit: w.unit, reps: w.reps == null ? '' : String(w.reps), sets: w.sets == null ? '' : String(w.sets), date: w.date } }); },
+    startEditWorkout: (id) => { const w = ref.current.workouts.find(x => x.id === id); if (!w) return; patch({ wEditId: id, wEdit: { kind: w.kind || 'lifting', exercise: w.exercise, weight: w.weight == null ? '' : String(w.weight), unit: w.unit, reps: w.reps == null ? '' : String(w.reps), sets: w.sets == null ? '' : String(w.sets), duration: w.durationMin == null ? '' : String(w.durationMin), intensity: w.intensity || 'moderate', climbRows: (w.grades && Object.keys(w.grades).length) ? Object.keys(w.grades).map(g => ({ grade: g, count: String(w.grades[g]) })) : [{ grade: 'V3', count: '' }], date: w.date } }); },
     setEdit: (p) => patch(s => ({ wEdit: { ...s.wEdit, ...p } })),
+    setEditClimbRow: (j, p) => patch(s => ({ wEdit: { ...s.wEdit, climbRows: s.wEdit.climbRows.map((r, rj) => rj === j ? { ...r, ...p } : r) } })),
+    addEditClimbRow: () => patch(s => ({ wEdit: { ...s.wEdit, climbRows: [...s.wEdit.climbRows, { grade: 'V4', count: '' }] } })),
+    removeEditClimbRow: (j) => patch(s => ({ wEdit: { ...s.wEdit, climbRows: s.wEdit.climbRows.length > 1 ? s.wEdit.climbRows.filter((_, rj) => rj !== j) : s.wEdit.climbRows } })),
     saveEditWorkout: () => {
       const s = ref.current, e = s.wEdit, id = s.wEditId; if (!e) return; const ex = (e.exercise || '').trim(); if (!ex) return;
-      const upd = { exercise: ex, weight: e.weight === '' ? null : Number(e.weight), unit: e.unit, reps: e.reps === '' ? null : Number(e.reps), sets: e.sets === '' ? null : Number(e.sets), sets_detail: null };
-      patch(st => ({ wEditId: null, wEdit: null, workouts: st.workouts.map(w => w.id === id ? { ...w, exercise: ex, weight: upd.weight, unit: e.unit, reps: upd.reps, sets: upd.sets, setsDetail: null } : w) }));
+      let upd, local;
+      if (e.kind === 'cardio') {
+        const dm = e.duration === '' ? null : Number(e.duration);
+        upd = { exercise: ex, kind: 'cardio', duration_min: dm, intensity: e.intensity || 'moderate', weight: null, reps: null, sets: null, sets_detail: null, grades: null, log_date: e.date };
+        local = { exercise: ex, kind: 'cardio', durationMin: dm, intensity: e.intensity || 'moderate', weight: null, reps: null, sets: null, setsDetail: null, grades: null, date: e.date };
+      } else if (e.kind === 'climb') {
+        const grades = {}; (e.climbRows || []).forEach(r => { const c = Number(r.count); if (r.grade && c > 0) grades[r.grade] = (grades[r.grade] || 0) + c; });
+        upd = { exercise: ex, kind: 'climb', grades, weight: null, reps: null, sets: null, sets_detail: null, duration_min: null, intensity: null, log_date: e.date };
+        local = { exercise: ex, kind: 'climb', grades, weight: null, reps: null, sets: null, setsDetail: null, durationMin: null, intensity: null, date: e.date };
+      } else {
+        upd = { exercise: ex, kind: 'lifting', weight: e.weight === '' ? null : Number(e.weight), unit: e.unit, reps: e.reps === '' ? null : Number(e.reps), sets: e.sets === '' ? null : Number(e.sets), sets_detail: null, log_date: e.date };
+        local = { exercise: ex, kind: 'lifting', weight: upd.weight, unit: e.unit, reps: upd.reps, sets: upd.sets, setsDetail: null, date: e.date };
+      }
+      patch(st => ({ wEditId: null, wEdit: null, workouts: st.workouts.map(w => w.id === id ? { ...w, ...local } : w) }));
       db(client.from('fitness_logs').update(upd).eq('id', id));
     },
     addBody: () => {
@@ -625,12 +640,38 @@ function EditWorkout({ v, primary }) {
         <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Edit set</h2><button onClick={close} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input value={e.exercise} onChange={(ev) => v.a.setEdit({ exercise: ev.target.value })} onFocus={focusScroll} placeholder="Exercise" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 16 }} />
+          {e.kind === 'cardio' ? (
+            <Fragment>
+              <div><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>MINUTES</div><input value={e.duration} onChange={(ev) => v.a.setEdit({ duration: ev.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="30" style={numIn} /></div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 4, textTransform: 'uppercase' }}>Intensity</div>
+                <div style={{ display: 'flex', gap: 5 }}>{INTENSITY.map(it => <button key={it.k} onClick={() => v.a.setEdit({ intensity: it.k })} style={{ flex: 1, border: '1px solid ' + (e.intensity === it.k ? primary : '#ece6db'), background: e.intensity === it.k ? primary : '#fff', color: e.intensity === it.k ? '#fff' : '#9a9186', borderRadius: 10, padding: '9px 4px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{it.l}</button>)}</div>
+              </div>
+            </Fragment>
+          ) : e.kind === 'climb' ? (
+            <Fragment>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 2, textTransform: 'uppercase' }}>Sends by grade</div>
+              {(e.climbRows || []).map((r, j) => (
+                <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <select value={r.grade} onChange={(ev) => v.a.setEditClimbRow(j, { grade: ev.target.value })} style={{ ...selStyle, width: '100%' }}>{VGRADES.map(g => <option key={g} value={g}>{g}</option>)}</select>
+                    <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><FI.Chevron size={12} /></span>
+                  </div>
+                  <span style={{ color: '#c3bbae', fontWeight: 800 }}>×</span>
+                  <input value={r.count} onChange={(ev) => v.a.setEditClimbRow(j, { count: ev.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="sends" style={{ ...numIn, flex: 1 }} />
+                  {e.climbRows.length > 1 && <button onClick={() => v.a.removeEditClimbRow(j)} aria-label="Remove grade" style={{ border: 'none', background: 'none', color: '#cbb9a2', fontSize: 16, cursor: 'pointer', padding: '8px 6px', lineHeight: 1, flexShrink: 0 }}>×</button>}
+                </div>
+              ))}
+              <button onClick={v.a.addEditClimbRow} style={{ alignSelf: 'flex-start', border: '1px dashed #d9cbb7', background: 'none', color: '#a8794f', borderRadius: 9, padding: '6px 12px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add grade</button>
+            </Fragment>
+          ) : (
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>SETS</div><input value={e.sets} onChange={(ev) => v.a.setEdit({ sets: ev.target.value })} onFocus={focusScroll} type="number" style={numIn} /></div>
             <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>REPS</div><input value={e.reps} onChange={(ev) => v.a.setEdit({ reps: ev.target.value })} onFocus={focusScroll} type="number" style={numIn} /></div>
             <div style={{ flex: 1.2 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>WEIGHT</div><input value={e.weight} onChange={(ev) => v.a.setEdit({ weight: ev.target.value })} onFocus={focusScroll} type="number" style={numIn} /></div>
             <div><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>UNIT</div><div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid #ece6db' }}>{UNITS.map(u => <button key={u} onClick={() => v.a.setEdit({ unit: u })} style={{ border: 'none', padding: '8px 9px', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', background: e.unit === u ? primary : '#fff', color: e.unit === u ? '#fff' : '#9a9186' }}>{u}</button>)}</div></div>
           </div>
+          )}
           <input value={e.date} onChange={(ev) => v.a.setEdit({ date: ev.target.value })} type="date" style={fieldInput} />
         </div>
         <div style={{ padding: '14px 22px 20px', display: 'flex', gap: 10 }}>
