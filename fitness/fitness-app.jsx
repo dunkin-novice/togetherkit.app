@@ -24,6 +24,10 @@ const VGRADES = Array.from({ length: 16 }, (_, i) => 'V' + i); // V0..V15
 const CLIMB_ACTIVITIES = ['Bouldering', 'Rock Climbing'];
 const CLIMB_SET = {}; CLIMB_ACTIVITIES.forEach(n => { CLIMB_SET[n] = true; });
 const climbPoints = (grades) => Object.keys(grades || {}).reduce((a, g) => { const v = parseInt(g.slice(1), 10); const c = Number(grades[g]) || 0; return a + (isNaN(v) ? 0 : c * Math.pow(2, v + 1)); }, 0);
+// HYROX competition stations (in race order) — labelled "HYROX"; time-based ones log as cardio, the rest as reps/weight
+const HYROX_STATIONS = ['SkiErg', 'Sled Push', 'Sled Pull', 'Burpee Broad Jumps', 'HYROX Row', 'Farmers Carry', 'Sandbag Lunges', 'Wall Balls'];
+const HYROX_CAT = {}; HYROX_STATIONS.forEach(n => { HYROX_CAT[n] = true; });
+const HYROX_CARDIO = { SkiErg: true, 'HYROX Row': true };
 const climbSummary = (grades) => {
   const keys = Object.keys(grades || {}).filter(g => Number(grades[g]) > 0).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
   if (!keys.length) return 'logged';
@@ -183,7 +187,7 @@ function useFitnessStore(homespaceId, me) {
         const nb = { ...b, ex: name };
         // auto-detect the activity kind and switch the block's mode
         if (CLIMB_SET[name]) { nb.kind = 'climb'; }
-        else if (ACTIVITY_CAT[name]) { nb.kind = 'cardio'; if (last && last.kind === 'cardio' && b.duration === '') { nb.duration = last.durationMin == null ? '' : String(last.durationMin); nb.intensity = last.intensity || b.intensity; } }
+        else if (ACTIVITY_CAT[name] || HYROX_CARDIO[name]) { nb.kind = 'cardio'; if (last && last.kind === 'cardio' && b.duration === '') { nb.duration = last.durationMin == null ? '' : String(last.durationMin); nb.intensity = last.intensity || b.intensity; } }
         else { nb.kind = 'lifting'; if (last && last.kind !== 'cardio' && b.mode === 'simple' && b.weight === '' && b.reps === '' && b.sets === '') { nb.weight = last.weight == null ? '' : String(last.weight); nb.reps = last.reps == null ? '' : String(last.reps); nb.sets = last.sets == null ? '' : String(last.sets); nb.unit = last.unit || b.unit; } }
         return nb;
       }) } }));
@@ -432,7 +436,7 @@ function buildView(state, actions, opts) {
 
   // ── sessions: group each person's sets on a day into one "Chest Day"-style card ──
   const exMusclesV = {}; (state.exLib || []).forEach(x => { exMusclesV[x.name.toLowerCase()] = x.muscles || []; });
-  const groupOfV = (name) => { if (CLIMB_SET[name]) return 'Climb'; if (ACTIVITY_CAT[name]) return ACTIVITY_CAT[name]; const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
+  const groupOfV = (name) => { if (HYROX_CAT[name]) return 'HYROX'; if (CLIMB_SET[name]) return 'Climb'; if (ACTIVITY_CAT[name]) return ACTIVITY_CAT[name]; const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
   const itemVol = (w) => { if (w.setsDetail && w.setsDetail.length) return w.setsDetail.reduce((a, r) => a + ((Number(r.weight) || 0) * (Number(r.reps) || 0)), 0); const mw = maxW(w); return (mw || 0) * (Number(w.reps) || 0) * (w.sets || 1); };
   const sessMap = {};
   workoutsByDate.forEach(w => { const k = (w.byUser || 'x') + '|' + w.date; (sessMap[k] = sessMap[k] || { key: k, byUser: w.byUser, date: w.date, color: w.color, initial: w.initial, who: w.who, mine: w.mine, items: [] }).items.push(w); });
@@ -478,8 +482,9 @@ function buildView(state, actions, opts) {
     compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus, weekDays, goal: state.fitGoal, leaderboard: lbMembers },
     exSuggestions: (q) => {
       const t = (q || '').toLowerCase().trim();
-      const acts = ACTIVITIES.map(a => ({ name: a.name, sub: a.cat.toLowerCase(), kind: 'cardio' })).concat(CLIMB_ACTIVITIES.map(n => ({ name: n, sub: 'climbing', kind: 'climb' })));
-      const lib = acts.concat((state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' })));
+      const acts = ACTIVITIES.map(a => ({ name: a.name, sub: a.cat.toLowerCase(), kind: 'cardio' })).concat(CLIMB_ACTIVITIES.map(n => ({ name: n, sub: 'climbing', kind: 'climb' }))).concat(HYROX_STATIONS.map(n => ({ name: n, sub: 'hyrox', kind: HYROX_CARDIO[n] ? 'cardio' : 'lifting' })));
+      const seenN = new Set(); // activities/HYROX entries win over duplicate library names
+      const lib = acts.concat((state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' }))).filter(x => { const k = x.name.toLowerCase(); if (seenN.has(k)) return false; seenN.add(k); return true; });
       if (!t) {
         const mine = (me ? state.workouts.filter(w => w.byUser === me.uid) : []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
         const seen = new Set(), recents = [];
