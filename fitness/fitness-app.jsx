@@ -28,6 +28,14 @@ const climbPoints = (grades) => Object.keys(grades || {}).reduce((a, g) => { con
 const HYROX_STATIONS = ['SkiErg', 'Sled Push', 'Sled Pull', 'Burpee Broad Jumps', 'HYROX Row', 'Farmers Carry', 'Sandbag Lunges', 'Wall Balls'];
 const HYROX_CAT = {}; HYROX_STATIONS.forEach(n => { HYROX_CAT[n] = true; });
 const HYROX_CARDIO = { SkiErg: true, 'HYROX Row': true };
+const HYROX_INFO = {
+  'SkiErg': '1000 m', 'HYROX Row': '1000 m', 'Burpee Broad Jumps': '80 m',
+  'Sled Push': '50 m · ♂152 / ♀102 kg (Pro ♂202 / ♀152)',
+  'Sled Pull': '50 m · ♂103 / ♀78 kg (Pro ♂153 / ♀103)',
+  'Farmers Carry': '200 m · ♂2×24 / ♀2×16 kg (Pro ♂2×32 / ♀2×24)',
+  'Sandbag Lunges': '100 m · ♂20 / ♀10 kg (Pro ♂30 / ♀20)',
+  'Wall Balls': '100 reps · ♂6 / ♀4 kg (Pro ♂9 / ♀6)',
+};
 const climbSummary = (grades) => {
   const keys = Object.keys(grades || {}).filter(g => Number(grades[g]) > 0).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
   if (!keys.length) return 'logged';
@@ -540,6 +548,7 @@ function AddWorkout({ v, primary }) {
                       {sugg.map(o => <button key={o.name} onMouseDown={(e) => { e.preventDefault(); v.a.pickExercise(i, o.name); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '9px 11px', borderRadius: 9, fontSize: 14, fontWeight: 700, color: '#3a352f', cursor: 'pointer', fontFamily: 'inherit' }}><span>{o.name}</span>{o.sub && <span style={{ fontSize: 11, fontWeight: 700, color: o.sub === 'recent' ? '#a8794f' : '#b3a99c', textTransform: 'capitalize', flexShrink: 0 }}>{o.sub}</span>}</button>)}
                     </div>
                   )}
+                  {HYROX_INFO[b.ex] && <div style={{ fontSize: 11.5, fontWeight: 700, color: '#a8794f', margin: '4px 2px 0' }}>🏆 HYROX · {HYROX_INFO[b.ex]}</div>}
                   {(() => { const lf = v.lastFor(b.ex); return lf ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#b3a99c', margin: '4px 2px 0' }}>Last time: {setsText(lf)} · {shortDate(lf.date)}</div> : null; })()}
                 </div>
                 <div style={{ display: 'flex', gap: 5, background: '#f3ece1', borderRadius: 10, padding: 3 }}>
