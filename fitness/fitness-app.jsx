@@ -195,10 +195,10 @@ function useFitnessStore(homespaceId, me) {
       const blocks = r.exercises.map(e => ({ ex: e.ex || e.exercise || '', unit: e.unit || 'kg', mode: 'simple', sets: e.sets == null ? '' : String(e.sets), reps: e.reps == null ? '' : String(e.reps), weight: e.weight == null ? '' : String(e.weight), rows: [{ weight: '', reps: '', drop: false }] }));
       patch({ wSession: { date: today(), blocks: blocks.length ? blocks : [emptyWBlock('kg')] }, wAddOpen: true, routineModal: false, exFocusKey: null });
     },
-    saveSessionAsRoutine: () => {
+    saveSessionAsRoutine: async () => {
       const s = ref.current, sess = s.wSession, m = meRef.current || {};
       const blocks = sess.blocks.filter(b => (b.ex || '').trim()); if (!blocks.length) return;
-      const name = (window.prompt('Name this routine') || '').trim(); if (!name) return;
+      const name = ((await window.TogetherUI.prompt({ title: 'Save as routine', placeholder: 'Name this routine', confirmLabel: 'Save' })) || '').trim(); if (!name) return;
       const exercises = blocks.map(b => ({ ex: b.ex.trim(), sets: b.sets === '' ? null : Number(b.sets), reps: b.reps === '' ? null : Number(b.reps), weight: b.weight === '' ? null : Number(b.weight), unit: b.unit }));
       const id = BE.newId();
       patch(st => ({ routines: [...st.routines, { id, name, exercises, byUser: m.uid, byName: m.name }] }));
@@ -381,13 +381,13 @@ function AddWorkout({ v, primary }) {
   return (
     <Overlay onClose={close}>
       <Sheet stop={v.stop} maxWidth={400}>
-        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Log a workout</h2><button onClick={close} style={closeX}>×</button></div>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Log a workout</h2><button onClick={close} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {sess.blocks.map((b, i) => {
             const sugg = v.exSuggestions(b.ex);
             return (
               <div key={i} style={{ border: '1px solid #ece6db', borderRadius: 16, padding: 12, background: '#fff', display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
-                {sess.blocks.length > 1 && <button onClick={() => v.a.removeBlock(i)} title="Remove" style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: '50%', border: 'none', background: '#f3ece1', color: '#b3a99c', fontSize: 14, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>×</button>}
+                {sess.blocks.length > 1 && <button onClick={() => v.a.removeBlock(i)} title="Remove" aria-label="Remove exercise" style={{ position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: '50%', border: 'none', background: '#f3ece1', color: '#b3a99c', fontSize: 14, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>×</button>}
                 <div style={{ position: 'relative' }}>
                   <input value={b.ex} onChange={(e) => v.a.setBlock(i, { ex: e.target.value })} onFocus={(e) => { v.a.set({ exFocusKey: i }); focusScroll(e); }} placeholder="Search exercise…" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 15.5, paddingRight: 34 }} />
                   {v.s.exFocusKey === i && sugg.length > 0 && (
@@ -411,9 +411,9 @@ function AddWorkout({ v, primary }) {
                       <div style={{ flex: 1 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>REPS</div><input value={b.reps} onChange={(e) => v.a.setBlock(i, { reps: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="8" style={numIn} /></div>
                       <div style={{ flex: 1.7 }}><div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 3, textAlign: 'center' }}>WEIGHT</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <button onClick={() => { const st = b.unit === 'lb' ? 5 : 2.5; v.a.setBlock(i, { weight: String(Math.max(0, Math.round(((Number(b.weight) || 0) - st) * 100) / 100)) }); }} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 37, borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>−</button>
+                          <button onClick={() => { const st = b.unit === 'lb' ? 5 : 2.5; v.a.setBlock(i, { weight: String(Math.max(0, Math.round(((Number(b.weight) || 0) - st) * 100) / 100)) }); }} aria-label="Decrease weight" style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 34, height: 40, borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>−</button>
                           <input value={b.weight} onChange={(e) => v.a.setBlock(i, { weight: e.target.value })} onFocus={focusScroll} type="number" inputMode="decimal" placeholder="60" style={{ ...numIn, flex: 1, padding: '10px 2px', minWidth: 0 }} />
-                          <button onClick={() => { const st = b.unit === 'lb' ? 5 : 2.5; v.a.setBlock(i, { weight: String(Math.round(((Number(b.weight) || 0) + st) * 100) / 100) }); }} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 37, borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>+</button>
+                          <button onClick={() => { const st = b.unit === 'lb' ? 5 : 2.5; v.a.setBlock(i, { weight: String(Math.round(((Number(b.weight) || 0) + st) * 100) / 100) }); }} aria-label="Increase weight" style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 34, height: 40, borderRadius: 9, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>+</button>
                         </div>
                       </div>
                     </div>
@@ -427,8 +427,8 @@ function AddWorkout({ v, primary }) {
                         <input value={r.weight} onChange={(e) => v.a.setRow(i, j, { weight: e.target.value })} onFocus={focusScroll} type="number" inputMode="decimal" placeholder="kg" style={{ ...numIn, flex: 1 }} />
                         <span style={{ color: '#c3bbae', fontWeight: 800 }}>×</span>
                         <input value={r.reps} onChange={(e) => v.a.setRow(i, j, { reps: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="reps" style={{ ...numIn, flex: 1 }} />
-                        <button onClick={() => v.a.setRow(i, j, { drop: !r.drop })} title="Drop set" style={{ border: 'none', borderRadius: 8, padding: '7px 9px', fontWeight: 800, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', background: r.drop ? '#cf6a52' : '#f3ece1', color: r.drop ? '#fff' : '#a89e90', flexShrink: 0 }}>drop</button>
-                        {b.rows.length > 1 && <button onClick={() => v.a.removeRow(i, j)} style={{ border: 'none', background: 'none', color: '#cbb9a2', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>}
+                        <button onClick={() => v.a.setRow(i, j, { drop: !r.drop })} title="Drop set" aria-label={r.drop ? 'Unmark drop set' : 'Mark as drop set'} aria-pressed={!!r.drop} style={{ border: 'none', borderRadius: 8, padding: '10px 9px', fontWeight: 800, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', background: r.drop ? '#cf6a52' : '#f3ece1', color: r.drop ? '#fff' : '#a89e90', flexShrink: 0, minHeight: 38 }}>drop</button>
+                        {b.rows.length > 1 && <button onClick={() => v.a.removeRow(i, j)} aria-label="Remove set" style={{ border: 'none', background: 'none', color: '#cbb9a2', fontSize: 16, cursor: 'pointer', padding: '8px 6px', lineHeight: 1, flexShrink: 0 }}>×</button>}
                       </div>
                     ))}
                     <button onClick={() => v.a.addRow(i)} style={{ alignSelf: 'flex-start', border: '1px dashed #d9cbb7', background: 'none', color: '#a8794f', borderRadius: 9, padding: '6px 12px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add set</button>
@@ -454,7 +454,7 @@ function EditWorkout({ v, primary }) {
   return (
     <Overlay onClose={close} z={1250}>
       <Sheet stop={v.stop} maxWidth={380}>
-        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Edit set</h2><button onClick={close} style={closeX}>×</button></div>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Edit set</h2><button onClick={close} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input value={e.exercise} onChange={(ev) => v.a.setEdit({ exercise: ev.target.value })} onFocus={focusScroll} placeholder="Exercise" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 16 }} />
           <div style={{ display: 'flex', gap: 8 }}>
@@ -480,7 +480,7 @@ function AddBody({ v, primary }) {
   return (
     <Overlay onClose={() => v.a.set({ bAddOpen: false })}>
       <Sheet stop={v.stop} maxWidth={380}>
-        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Log body stats</h2><button onClick={() => v.a.set({ bAddOpen: false })} style={closeX}>×</button></div>
+        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Log body stats</h2><button onClick={() => v.a.set({ bAddOpen: false })} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', border: '1px solid #ece6db', background: '#fff', borderRadius: 14, padding: 10 }}>
             <span style={{ width: 52, height: 52, borderRadius: 11, background: '#f2ece2', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{d.photo ? <img src={d.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📷'}</span>
@@ -538,9 +538,9 @@ function RestTimer({ v, primary }) {
     <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 1500, background: done ? '#6f9c5a' : '#3a352f', color: '#fff', borderRadius: 999, boxShadow: '0 12px 30px rgba(58,53,47,.34)', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px 8px 16px', fontFamily: 'inherit' }}>
       {done ? <span style={{ fontWeight: 800, fontSize: 14.5 }}>💪 Rest done!</span> : <Fragment>
         <span style={{ fontWeight: 800, fontSize: 17, fontVariantNumeric: 'tabular-nums', minWidth: 46 }}>{mm}:{String(ss).padStart(2, '0')}</span>
-        <button onClick={() => v.a.addRest(30)} style={{ border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', borderRadius: 999, padding: '6px 11px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+30s</button>
+        <button onClick={() => v.a.addRest(30)} aria-label="Add 30 seconds to rest timer" style={{ border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', borderRadius: 999, padding: '9px 13px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+30s</button>
       </Fragment>}
-      <button onClick={() => v.a.stopRest()} title="Stop" style={{ border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>×</button>
+      <button onClick={() => v.a.stopRest()} title="Stop" aria-label="Stop rest timer" style={{ border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0 }}>×</button>
     </div>
   );
 }
@@ -550,7 +550,7 @@ function RoutinesModal({ v, primary }) {
   return (
     <Overlay onClose={close} z={1240}>
       <Sheet stop={v.stop} maxWidth={400}>
-        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Routines</h2><button onClick={close} style={closeX}>×</button></div>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Routines</h2><button onClick={close} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 9 }}>
           <button onClick={v.a.newRoutine} style={{ border: '1px dashed #cbb9a2', background: 'transparent', color: '#a8794f', borderRadius: 13, padding: 12, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>+ New routine</button>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.5px', textTransform: 'uppercase', margin: '2px 2px 0' }}>Start from a template</div>
@@ -563,8 +563,8 @@ function RoutinesModal({ v, primary }) {
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#9a9186', marginTop: 1 }}>{r.exercises.length} exercise{r.exercises.length === 1 ? '' : 's'}</div>
               </div>
               <button onClick={() => v.a.startRoutine(r.id)} style={{ background: primary, color: '#fff', border: 'none', borderRadius: 10, padding: '7px 13px', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Start</button>
-              <button onClick={() => v.a.editRoutine(r.id)} title="Edit" style={{ border: 'none', background: '#ece6db', color: '#857c70', width: 30, height: 30, borderRadius: 9, cursor: 'pointer', flexShrink: 0 }}>✎</button>
-              <button onClick={() => { if (window.confirm('Delete routine “' + r.name + '”?')) v.a.deleteRoutine(r.id); }} title="Delete" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 4, lineHeight: 0 }}><FI.Trash size={15} /></button>
+              <button onClick={() => v.a.editRoutine(r.id)} title="Edit" aria-label="Edit routine" style={{ border: 'none', background: '#ece6db', color: '#857c70', width: 38, height: 38, borderRadius: 9, cursor: 'pointer', flexShrink: 0 }}>✎</button>
+              <button onClick={async () => { if (await window.TogetherUI.confirm({ title: 'Delete routine “' + r.name + '”?', confirmLabel: 'Delete', danger: true })) v.a.deleteRoutine(r.id); }} title="Delete" aria-label="Delete routine" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 8, lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FI.Trash size={15} /></button>
             </div>
           ))}
         </div>
@@ -581,14 +581,14 @@ function RoutineEditor({ v, primary }) {
   return (
     <Overlay onClose={close} z={1260}>
       <Sheet stop={v.stop} maxWidth={400}>
-        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>{re.id ? 'Edit routine' : 'New routine'}</h2><button onClick={close} style={closeX}>×</button></div>
+        <div style={{ padding: '20px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>{re.id ? 'Edit routine' : 'New routine'}</h2><button onClick={close} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 11 }}>
           <input value={re.name} onChange={(e) => v.a.setRoutineEdit({ name: e.target.value })} placeholder="Routine name — e.g. Push A" autoFocus style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 16 }} />
           {re.rows.map((r, j) => {
             const sugg = v.exSuggestions(r.ex);
             return (
               <div key={j} style={{ border: '1px solid #ece6db', borderRadius: 14, padding: 10, background: '#fff', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-                {re.rows.length > 1 && <button onClick={() => v.a.routineRowRemove(j)} style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', border: 'none', background: '#f3ece1', color: '#b3a99c', fontSize: 13, cursor: 'pointer', zIndex: 2 }}>×</button>}
+                {re.rows.length > 1 && <button onClick={() => v.a.routineRowRemove(j)} aria-label="Remove exercise" style={{ position: 'absolute', top: 5, right: 5, width: 30, height: 30, borderRadius: '50%', border: 'none', background: '#f3ece1', color: '#b3a99c', fontSize: 13, cursor: 'pointer', zIndex: 2 }}>×</button>}
                 <div style={{ position: 'relative' }}>
                   <input value={r.ex} onChange={(e) => v.a.routineRowSet(j, { ex: e.target.value })} onFocus={(e) => { setFocus(j); focusScroll(e); }} placeholder="Exercise" style={{ ...fieldInput, fontSize: 14.5, padding: '10px 30px 10px 12px' }} />
                   {focus === j && sugg.length > 0 && (
@@ -639,9 +639,9 @@ function CompareSection({ v }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
           <span style={upper}>Weekly goal</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <button onClick={() => v.a.setGoal(c.goal - 1)} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 26, borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1 }}>−</button>
+            <button onClick={() => v.a.setGoal(c.goal - 1)} aria-label="Decrease weekly goal" style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 40, height: 40, borderRadius: 9, fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>−</button>
             <span style={{ fontSize: 13, fontWeight: 800, color: '#3a352f', minWidth: 64, textAlign: 'center' }}>{c.goal}× / week</span>
-            <button onClick={() => v.a.setGoal(c.goal + 1)} style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 26, height: 26, borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1 }}>+</button>
+            <button onClick={() => v.a.setGoal(c.goal + 1)} aria-label="Increase weekly goal" style={{ border: '1px solid #ece6db', background: '#fff', color: '#7a7166', width: 40, height: 40, borderRadius: 9, fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>+</button>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -732,7 +732,7 @@ function PhotoCompare({ v }) {
   return (
     <Overlay onClose={close} z={1260}>
       <Sheet stop={v.stop} maxWidth={440}>
-        <div style={{ padding: '20px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Progress photos</h2><button onClick={close} style={closeX}>×</button></div>
+        <div style={{ padding: '20px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Progress photos</h2><button onClick={close} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px 8px', display: 'flex', gap: 10 }}><Side p={L} idx={li} set={setLi} /><Side p={R} idx={ri} set={setRi} /></div>
         <div style={{ padding: '12px 22px 20px' }}><button onClick={close} style={{ ...cancelBtn, flex: 'none', width: '100%' }}>Done</button></div>
       </Sheet>
@@ -790,12 +790,12 @@ function Board({ v, isDesktop, primary, partner }) {
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
                   </div>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={w.color} initial={w.initial} />{shortDate(w.date)}</span>
-                  <button onClick={(ev) => { ev.stopPropagation(); w.remove(); }} title="Delete" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 4, lineHeight: 0 }}><FI.Trash size={16} /></button>
+                  <button onClick={(ev) => { ev.stopPropagation(); w.remove(); }} title="Delete" aria-label="Delete workout" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 8, lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FI.Trash size={16} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {w.reactions.map(r => <button key={r.emoji} onClick={() => w.react(r.emoji)} title={r.names.join(', ')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid ' + (r.mine ? '#e7d3a3' : '#ece6db'), background: r.mine ? '#fdf8ee' : '#fff', borderRadius: 999, padding: '3px 9px', fontSize: 12.5, fontWeight: 800, color: '#7a7166', cursor: 'pointer', fontFamily: 'inherit' }}>{r.emoji} {r.count}</button>)}
                   <div style={{ position: 'relative' }}>
-                    <button onClick={() => v.a.set({ reactOpen: v.s.reactOpen === w.id ? null : w.id })} style={{ border: 'none', background: 'none', color: '#c3bbae', cursor: 'pointer', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', padding: '3px 6px' }}>{w.reactions.length ? '＋' : '☺ React'}</button>
+                    <button onClick={() => v.a.set({ reactOpen: v.s.reactOpen === w.id ? null : w.id })} aria-label="Add reaction" style={{ border: 'none', background: 'none', color: '#c3bbae', cursor: 'pointer', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', padding: '6px 9px' }}>{w.reactions.length ? '＋' : '☺ React'}</button>
                     {v.s.reactOpen === w.id && (
                       <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, background: '#fff', border: '1px solid #ece6db', borderRadius: 999, boxShadow: '0 8px 22px rgba(58,53,47,.18)', padding: '5px 7px', display: 'flex', gap: 3, zIndex: 8 }}>
                         {REACT_EMOJIS.map(e => <button key={e} onClick={() => w.react(e)} style={{ border: 'none', background: 'none', fontSize: 19, cursor: 'pointer', padding: '2px 3px', lineHeight: 1 }}>{e}</button>)}
@@ -831,7 +831,7 @@ function Board({ v, isDesktop, primary, partner }) {
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{[b.bodyFat != null ? 'fat ' + b.bodyFat + '%' : null, b.muscleMass != null ? 'muscle ' + b.muscleMass : null].filter(Boolean).join(' · ') || ' '}</div>
                 </div>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={b.color} initial={b.initial} />{shortDate(b.date)}</span>
-                <button onClick={b.remove} title="Delete" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 4, lineHeight: 0 }}><FI.Trash size={16} /></button>
+                <button onClick={b.remove} title="Delete" aria-label="Delete body entry" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 8, lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FI.Trash size={16} /></button>
               </div>
             ))}
             {!v.s.syncing && v.body.length === 0 && <div style={{ textAlign: 'center', padding: '30px 10px', color: '#b3a99c', fontWeight: 600, fontSize: 14 }}>No entries yet — tap “Log body stats”.</div>}

@@ -245,9 +245,9 @@ function useIdeasStore(homespaceId, me, members) {
 const chipBase = { padding: '3px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-block' };
 const upper = { fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' };
 const thumbBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: '#f3ece1', color: '#b59a7d', width: 24, height: 24, borderRadius: 8, cursor: 'pointer', flexShrink: 0, padding: 0 };
-const iconBtn = { border: 'none', background: 'none', padding: 2, cursor: 'pointer', lineHeight: 0 };
+const iconBtn = { border: 'none', background: 'none', padding: 9, margin: -7, cursor: 'pointer', lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 const importantTag = { fontSize: 11, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '3px 9px', borderRadius: 8 };
-const closeX = { flexShrink: 0, width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer', lineHeight: 1 };
+const closeX = { flexShrink: 0, width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer', lineHeight: 1 };
 const fieldInput = { border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '13px 15px', fontSize: 15, fontFamily: 'inherit', color: '#3a352f', outline: 'none', fontWeight: 600, width: '100%' };
 const selectStyle = { border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '12px 13px', fontSize: 14, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', cursor: 'pointer', width: '100%', appearance: 'none', WebkitAppearance: 'none' };
 const cancelBtn = { flex: 1, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
@@ -269,7 +269,7 @@ function StatusPill({ idea }) {
 }
 function CalCircle({ scheduled, partner, onClick, size = 26 }) {
   return (
-    <button onClick={onClick} title={scheduled ? 'Scheduled' : 'Schedule this'} style={{ width: size, height: size, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all .15s', border: scheduled ? ('2px solid ' + partner) : '2px solid #dcd4c6', background: scheduled ? partner : '#fff' }}>
+    <button onClick={onClick} title={scheduled ? 'Scheduled' : 'Schedule this'} aria-label={scheduled ? 'Unschedule' : 'Schedule this'} style={{ width: size, height: size, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all .15s', border: scheduled ? ('2px solid ' + partner) : '2px solid #dcd4c6', background: scheduled ? partner : '#fff' }}>
       {scheduled ? <DIcons.Check size={14} color="#fff" /> : <DIcons.Calendar size={13} color="#c2b59f" />}
     </button>
   );
@@ -277,9 +277,9 @@ function CalCircle({ scheduled, partner, onClick, size = 26 }) {
 function LinkButtons({ idea }) {
   return (
     <Fragment>
-      {idea.image && <button onClick={idea.openImg} title="View photo" style={thumbBtn}><DIcons.Camera size={13} /></button>}
-      {idea.mapsUrl && <button onClick={(e) => openUrl(e, idea.mapsUrl)} title="Open in Maps" style={thumbBtn}><DIcons.Pin size={13} color="#b59a7d" /></button>}
-      {idea.siteUrl && <button onClick={(e) => openUrl(e, idea.siteUrl)} title="Visit site" style={thumbBtn}><DIcons.Globe size={13} color="#b59a7d" /></button>}
+      {idea.image && <button onClick={idea.openImg} title="View photo" aria-label="View photo" style={thumbBtn}><DIcons.Camera size={13} /></button>}
+      {idea.mapsUrl && <button onClick={(e) => openUrl(e, idea.mapsUrl)} title="Open in Maps" aria-label="Open in Maps" style={thumbBtn}><DIcons.Pin size={13} color="#b59a7d" /></button>}
+      {idea.siteUrl && <button onClick={(e) => openUrl(e, idea.siteUrl)} title="Visit site" aria-label="Visit site" style={thumbBtn}><DIcons.Globe size={13} color="#b59a7d" /></button>}
     </Fragment>
   );
 }
@@ -357,7 +357,7 @@ function IdeaCard({ idea, partner }) {
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-        <button onClick={idea.star} title="Mark important" style={iconBtn}><DIcons.Star size={19} filled={idea.important} /></button>
+        <button onClick={idea.star} title="Mark important" aria-label={idea.important ? 'Unmark important' : 'Mark important'} style={iconBtn}><DIcons.Star size={19} filled={idea.important} /></button>
         <StatusPill idea={idea} />
       </div>
     </div>
@@ -378,10 +378,10 @@ function IdeaRow({ idea, partner }) {
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{idea.byName}<span style={{ color: '#b8b0a3' }}> · {idea.date}</span></span>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <button onClick={idea.star} title="Mark important" style={{ ...iconBtn, flexShrink: 0 }}><DIcons.Star size={18} filled={idea.important} /></button>
+        <button onClick={idea.star} title="Mark important" aria-label={idea.important ? 'Unmark important' : 'Mark important'} style={{ ...iconBtn, flexShrink: 0 }}><DIcons.Star size={18} filled={idea.important} /></button>
         <StatusPill idea={idea} />
       </span>
-      <button onClick={idea.remove} style={{ background: 'none', border: 'none', color: '#cfc7ba', fontSize: 18, cursor: 'pointer', padding: 2, lineHeight: 1 }}>×</button>
+      <button onClick={idea.remove} aria-label="Delete idea" style={{ background: 'none', border: 'none', color: '#cfc7ba', fontSize: 18, cursor: 'pointer', padding: '11px 2px', lineHeight: 1 }}>×</button>
     </div>
   );
 }
@@ -415,7 +415,7 @@ function CategoriesPanel({ v, partner, maxWidth }) {
             {v.manageCats.map(cl => (
               <div key={cl.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={cl.dotStyle} /><input value={cl.name} onChange={cl.rename} style={labelInput} />
-                <button onClick={cl.remove} title="Delete category" style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
+                <button onClick={cl.remove} title="Delete category" aria-label="Delete category" style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 40, height: 40, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
               </div>
             ))}
           </div>

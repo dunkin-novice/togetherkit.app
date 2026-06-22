@@ -118,9 +118,9 @@ function useNotesStore(homespaceId, me) {
 /* ── shared style fragments ───────────────────────────────────────────────── */
 const upper = { fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' };
 const chipBase = { padding: '3px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-block' };
-const iconBtn = { border: 'none', background: 'none', padding: 2, cursor: 'pointer', lineHeight: 0 };
+const iconBtn = { border: 'none', background: 'none', padding: 9, margin: -7, cursor: 'pointer', lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 const importantTag = { fontSize: 11, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '3px 9px', borderRadius: 8 };
-const closeX = { flexShrink: 0, width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer', lineHeight: 1 };
+const closeX = { flexShrink: 0, width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer', lineHeight: 1 };
 const fieldInput = { border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '13px 15px', fontSize: 15, fontFamily: 'inherit', color: '#3a352f', outline: 'none', fontWeight: 700, width: '100%' };
 const selectStyle = { border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '12px 13px', fontSize: 14, fontFamily: 'inherit', color: '#3a352f', fontWeight: 700, outline: 'none', cursor: 'pointer', width: '100%', appearance: 'none', WebkitAppearance: 'none' };
 const cancelBtn = { flex: 1, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
@@ -186,7 +186,7 @@ function NoteCard({ note }) {
           </span>
         </div>
       </div>
-      <button onClick={note.star} title="Mark important" style={iconBtn}><NI.Star size={19} filled={note.important} /></button>
+      <button onClick={note.star} title="Mark important" aria-label={note.important ? 'Unmark important' : 'Mark important'} style={iconBtn}><NI.Star size={19} filled={note.important} /></button>
     </div>
   );
 }
@@ -216,7 +216,7 @@ function LabelsPanel({ v, partner, maxWidth }) {
           {v.customLabels.map(cl => (
             <div key={cl.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={cl.dotStyle} /><input value={cl.name} onChange={cl.rename} style={labelInput} />
-              <button onClick={cl.remove} style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 34, height: 34, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
+              <button onClick={cl.remove} aria-label="Delete label" style={{ background: '#f6ece9', border: 'none', color: '#b07a6e', width: 40, height: 40, borderRadius: 10, fontSize: 16, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>×</button>
             </div>
           ))}
         </div>
@@ -242,7 +242,7 @@ function AddModal({ v, primary }) {
       <Sheet stop={v.stop} maxWidth={380}>
         <div style={{ padding: '22px 22px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <h2 style={modalTitle}>New note</h2>
-          <button onClick={() => v.a.set({ addOpen: false })} style={closeX}>×</button>
+          <button onClick={() => v.a.set({ addOpen: false })} aria-label="Close" style={closeX}>×</button>
         </div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input value={d.title} onChange={(e) => v.a.setDraft({ title: e.target.value })} placeholder="Note title" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 17 }} autoFocus />
@@ -286,9 +286,9 @@ function DetailModal({ v, primary, partner }) {
               ? <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 24, fontWeight: 700, margin: 0, color: '#3a352f', lineHeight: 1.15 }}>{note.title}</h2>
               : <input value={e.title} onChange={(ev) => v.a.setEdit({ title: ev.target.value })} style={{ flex: 1, border: '1px solid #ece6db', background: '#fff', borderRadius: 12, padding: '11px 13px', fontSize: 18, fontFamily: "'Quicksand',sans-serif", fontWeight: 700, color: '#3a352f', outline: 'none' }} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <button onClick={v.a.duplicateItem} title="Duplicate" style={{ border: 'none', background: '#ece6db', color: '#7a7166', width: 30, height: 30, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
-              <button onClick={() => v.a.toggleImportant(note.id)} title="Mark important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}><NI.Star size={22} filled={note.important} /></button>
-              <button onClick={() => v.a.set({ detailId: null, editing: false })} style={closeX}>×</button>
+              <button onClick={v.a.duplicateItem} title="Duplicate" aria-label="Duplicate" style={{ border: 'none', background: '#ece6db', color: '#7a7166', width: 40, height: 40, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+              <button onClick={() => v.a.toggleImportant(note.id)} title="Mark important" aria-label={note.important ? 'Unmark important' : 'Mark important'} style={{ border: 'none', background: 'none', padding: 9, cursor: 'pointer', lineHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><NI.Star size={22} filled={note.important} /></button>
+              <button onClick={() => v.a.set({ detailId: null, editing: false })} aria-label="Close" style={closeX}>×</button>
             </div>
           </div>
           {!editing ? (
@@ -331,7 +331,7 @@ function BugModal({ v, primary }) {
           <div style={{ padding: '24px 22px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
               <div><h2 style={{ ...modalTitle, marginBottom: 4 }}>Report a Problem</h2><p style={{ margin: 0, fontSize: 14, color: '#9a9186', fontWeight: 600 }}>Help us improve Together.</p></div>
-              <button onClick={() => v.a.set({ bugOpen: false })} style={closeX}>×</button>
+              <button onClick={() => v.a.set({ bugOpen: false })} aria-label="Close" style={closeX}>×</button>
             </div>
             <textarea value={s.bugText} onChange={(e) => v.a.set({ bugText: e.target.value })} placeholder="Tell us what went wrong…" style={{ marginTop: 16, width: '100%', minHeight: 92, resize: 'vertical', background: '#fff', borderRadius: 14, padding: '13px 14px', fontSize: 14.5, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.5, border: '1px solid #ece6db' }} />
             <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
@@ -493,7 +493,7 @@ function Board({ v, isDesktop, primary, partner }) {
         <Sheet stop={v.stop} maxWidth={380}>
           <div style={{ padding: '22px 22px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div><h2 style={modalTitle}>Export notes</h2><p style={{ margin: '4px 0 0', fontSize: 14, color: '#9a9186', fontWeight: 600 }}>Choose what to copy.</p></div>
-            <button onClick={onClose} style={closeX}>×</button>
+            <button onClick={onClose} aria-label="Close" style={closeX}>×</button>
           </div>
           <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Sec label="Labels to include">{labels.map(l => <Chip key={l.id} on={selL.has(l.id)} onClick={() => tL(l.id)}>{l.name}</Chip>)}<Chip on={selL.has('__none')} onClick={() => tL('__none')}>No label</Chip></Sec>
@@ -587,7 +587,7 @@ function BoardShell({ sx }) {
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
-      <button onClick={() => v.a.set({ bugOpen: true, bugSent: false })} title="Report a problem" style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}><NI.Bug size={21} /></button>
+      <button onClick={() => v.a.set({ bugOpen: true, bugSent: false })} title="Report a problem" aria-label="Report a problem" style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}><NI.Bug size={21} /></button>
       <AddModal v={v} primary={primary} />
       <DetailModal v={v} primary={primary} partner={partner} />
       <BugModal v={v} primary={primary} />

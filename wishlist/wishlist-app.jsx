@@ -113,7 +113,7 @@ function useWishStore(homespaceId, me) {
 
 /* ── style fragments ──────────────────────────────────────────────────────── */
 const upper = { fontSize: 11, fontWeight: 800, color: '#aaa093', letterSpacing: '.6px', textTransform: 'uppercase' };
-const closeX = { flexShrink: 0, width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer', lineHeight: 1 };
+const closeX = { flexShrink: 0, width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#ece6db', color: '#857c70', fontSize: 17, cursor: 'pointer', lineHeight: 1 };
 const fieldInput = { border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: '13px 15px', fontSize: 15, fontFamily: 'inherit', color: '#3a352f', outline: 'none', fontWeight: 700, width: '100%' };
 const cancelBtn = { flex: 1, background: '#fff', color: '#7a7166', border: '1px solid #e6ded2', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
 const modalTitle = { fontFamily: "'Quicksand',sans-serif", fontSize: 23, fontWeight: 700, margin: 0, color: '#3a352f' };
@@ -121,7 +121,12 @@ const priceBadge = { fontSize: 13, fontWeight: 800, color: '#6f7d52', background
 function WAvatar({ color, initial, size = 20 }) { return <span style={{ width: size, height: size, borderRadius: '50%', background: color, color: '#fff', fontWeight: 800, fontSize: size * 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initial}</span>; }
 function Overlay({ onClose, z = 1200, children }) { return <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: z, background: 'rgba(58,53,47,.42)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, animation: 'tog-fade .15s ease' }}>{children}</div>; }
 function Sheet({ stop, maxWidth, children, style }) { return <div onClick={stop} style={{ width: '100%', maxWidth, background: '#f6f4ef', borderRadius: 26, boxShadow: '0 24px 60px rgba(58,53,47,.34)', overflow: 'hidden', maxHeight: '92vh', display: 'flex', flexDirection: 'column', animation: 'tog-pop .18s ease', ...style }}>{children}</div>; }
-function Thumb({ src, size = 64 }) { return <span style={{ width: size, height: size, borderRadius: 13, background: '#f2ece2', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c9bfae' }}>{src ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} /> : <WI.Heart size={Math.round(size * 0.42)} />}</span>; }
+function Thumb({ src, size = 64 }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  const showImg = src && !failed;
+  return <span style={{ width: size, height: size, borderRadius: 13, background: '#f2ece2', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c9bfae' }}>{showImg ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setFailed(true)} /> : <WI.Heart size={Math.round(size * 0.42)} />}</span>;
+}
 
 function WSwipeRow({ onDelete, onComplete, completeLabel = 'Got it', completeColor = '#6f9c5a', radius = 18, children }) {
   const [dx, setDx] = useState(0); const [dragging, setDragging] = useState(false); const [removing, setRemoving] = useState(false);
@@ -154,9 +159,9 @@ function WishCard({ w, partner }) {
           <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#9a9186', fontSize: 12, fontWeight: 600 }}><WAvatar color={w.byColor} initial={w.byInitial} size={18} />{w.byName}</span>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {w.url && <a href={w.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open link" style={{ color: '#a8794f', lineHeight: 0 }}><WI.External size={18} /></a>}
-        <button onClick={w.star} title="Important" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', lineHeight: 0 }}><WI.Star size={18} filled={w.important} /></button>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0, marginRight: -7 }}>
+        {w.url && <a href={w.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open link" aria-label="Open link" style={{ color: '#a8794f', lineHeight: 0, padding: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><WI.External size={18} /></a>}
+        <button onClick={w.star} title="Important" aria-label={w.important ? 'Unmark important' : 'Mark important'} style={{ border: 'none', background: 'none', padding: 9, cursor: 'pointer', lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><WI.Star size={18} filled={w.important} /></button>
       </div>
     </div>
   );
@@ -169,7 +174,7 @@ function AddModal({ v, primary }) {
   return (
     <Overlay onClose={() => v.a.set({ addOpen: false })}>
       <Sheet stop={v.stop} maxWidth={400}>
-        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Add to wishlist</h2><button onClick={() => v.a.set({ addOpen: false })} style={closeX}>×</button></div>
+        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Add to wishlist</h2><button onClick={() => v.a.set({ addOpen: false })} aria-label="Close" style={closeX}>×</button></div>
         <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -204,7 +209,7 @@ function BulkModal({ v, primary }) {
   return (
     <Overlay onClose={() => v.a.set({ bulkOpen: false })}>
       <Sheet stop={v.stop} maxWidth={400}>
-        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Bulk add links</h2><button onClick={() => v.a.set({ bulkOpen: false })} style={closeX}>×</button></div>
+        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>Bulk add links</h2><button onClick={() => v.a.set({ bulkOpen: false })} aria-label="Close" style={closeX}>×</button></div>
         <div style={{ padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <textarea value={v.s.bulkText} onChange={(e) => v.a.set({ bulkText: e.target.value })} placeholder={ph} autoFocus style={{ width: '100%', minHeight: 168, resize: 'vertical', border: '1px solid #ece6db', background: '#fff', borderRadius: 14, padding: '13px 14px', fontSize: 13.5, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.6 }} />
           <p style={{ margin: '0 2px', fontSize: 11.5, color: '#b3a99c', fontWeight: 600 }}>We add them now and pull the photo/title/price for each in the background — whatever the shop allows. Edit anything later.</p>
@@ -228,7 +233,7 @@ function DetailModal({ v, primary, partner }) {
           <div style={{ padding: '18px 22px 8px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               {!editing ? <h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 22, fontWeight: 700, margin: 0, color: '#3a352f', lineHeight: 1.15, textDecoration: w.got ? 'line-through' : 'none' }}>{w.title}</h2> : <input value={e.title} onChange={(ev) => v.a.setEdit({ title: ev.target.value })} style={{ flex: 1, ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 17, padding: '10px 12px' }} />}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}><button onClick={v.a.duplicateItem} title="Duplicate" style={{ border: 'none', background: '#ece6db', color: '#7a7166', width: 30, height: 30, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button><button onClick={() => v.a.toggleImportant(w.id)} title="Important" style={{ border: 'none', background: 'none', padding: 4, cursor: 'pointer', lineHeight: 0 }}><WI.Star size={22} filled={w.important} /></button><button onClick={() => v.a.set({ detailId: null, editing: false })} style={closeX}>×</button></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}><button onClick={v.a.duplicateItem} title="Duplicate" aria-label="Duplicate" style={{ border: 'none', background: '#ece6db', color: '#7a7166', width: 40, height: 40, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button><button onClick={() => v.a.toggleImportant(w.id)} title="Important" aria-label={w.important ? 'Unmark important' : 'Mark important'} style={{ border: 'none', background: 'none', padding: 9, cursor: 'pointer', lineHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><WI.Star size={22} filled={w.important} /></button><button onClick={() => v.a.set({ detailId: null, editing: false })} aria-label="Close" style={closeX}>×</button></div>
             </div>
             {!editing ? (
               <Fragment>
@@ -266,7 +271,7 @@ function DetailModal({ v, primary, partner }) {
 function BugModal({ v, primary }) {
   if (!v.s.bugOpen) return null; const s = v.s;
   return (<Overlay onClose={() => v.a.set({ bugOpen: false, bugSent: false })} z={1400}><Sheet stop={v.stop} maxWidth={380}>{!s.bugSent ? (
-    <div style={{ padding: '24px 22px' }}><div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}><h2 style={{ ...modalTitle, marginBottom: 4 }}>Report a Problem</h2><button onClick={() => v.a.set({ bugOpen: false })} style={closeX}>×</button></div><textarea value={s.bugText} onChange={(e) => v.a.set({ bugText: e.target.value })} placeholder="Tell us what went wrong…" style={{ marginTop: 16, width: '100%', minHeight: 92, resize: 'vertical', background: '#fff', borderRadius: 14, padding: '13px 14px', fontSize: 14.5, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.5, border: '1px solid #ece6db' }} /><div style={{ marginTop: 18, display: 'flex', gap: 10 }}><button onClick={() => v.a.set({ bugOpen: false })} style={cancelBtn}>Cancel</button><button onClick={v.a.sendBug} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Send Report</button></div></div>
+    <div style={{ padding: '24px 22px' }}><div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}><h2 style={{ ...modalTitle, marginBottom: 4 }}>Report a Problem</h2><button onClick={() => v.a.set({ bugOpen: false })} aria-label="Close" style={closeX}>×</button></div><textarea value={s.bugText} onChange={(e) => v.a.set({ bugText: e.target.value })} placeholder="Tell us what went wrong…" style={{ marginTop: 16, width: '100%', minHeight: 92, resize: 'vertical', background: '#fff', borderRadius: 14, padding: '13px 14px', fontSize: 14.5, fontFamily: 'inherit', fontWeight: 600, color: '#3a352f', outline: 'none', lineHeight: 1.5, border: '1px solid #ece6db' }} /><div style={{ marginTop: 18, display: 'flex', gap: 10 }}><button onClick={() => v.a.set({ bugOpen: false })} style={cancelBtn}>Cancel</button><button onClick={v.a.sendBug} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Send Report</button></div></div>
   ) : (<div style={{ padding: '38px 28px 30px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}><h2 style={{ fontFamily: "'Quicksand',sans-serif", fontSize: 25, fontWeight: 700, margin: 0, color: '#3a352f' }}>Thanks ♥</h2><button onClick={() => v.a.set({ bugOpen: false, bugSent: false, bugText: '' })} style={{ marginTop: 6, width: '100%', background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button></div>)}</Sheet></Overlay>);
 }
 
@@ -351,7 +356,7 @@ function BoardShell({ sx }) {
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
-      <button onClick={() => v.a.set({ bugOpen: true, bugSent: false })} title="Report a problem" style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}><WI.Bug size={21} /></button>
+      <button onClick={() => v.a.set({ bugOpen: true, bugSent: false })} title="Report a problem" aria-label="Report a problem" style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}><WI.Bug size={21} /></button>
       <AddModal v={v} primary={primary} /><BulkModal v={v} primary={primary} /><DetailModal v={v} primary={primary} partner={partner} /><BugModal v={v} primary={primary} />
       <TweaksPanel title="Tweaks"><TweakSection label="People"><TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)} options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} /><TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)} options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} /></TweakSection></TweaksPanel>
     </div>

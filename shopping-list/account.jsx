@@ -128,8 +128,8 @@ function AccountSheet({ sx, onClose }) {
     } catch (e) {}
     setMaking(false);
   };
-  const newSpace = async () => { const nm = window.prompt('Name your new space'); if (nm && nm.trim()) { try { await sx.actions.createHome(nm.trim()); onClose(); } catch (e) {} } };
-  const leave = (s) => { if (window.confirm('Leave “' + s.name + '”? You lose access to its lists (they stay for everyone else).')) sx.actions.leaveHome(s.id).catch(() => {}); };
+  const newSpace = async () => { const nm = await window.TogetherUI.prompt({ title: 'New space', placeholder: 'Name your new space', confirmLabel: 'Create' }); if (nm && nm.trim()) { try { await sx.actions.createHome(nm.trim()); onClose(); } catch (e) {} } };
+  const leave = async (s) => { if (await window.TogetherUI.confirm({ title: 'Leave “' + s.name + '”?', message: 'You lose access to its lists (they stay for everyone else).', confirmLabel: 'Leave', danger: true })) sx.actions.leaveHome(s.id).catch(() => {}); };
 
   const TabBtn = ({ id, label }) => (
     <button onClick={() => setTab(id)} style={{ flex: 1, padding: '9px 8px', borderRadius: 11, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 13, background: tab === id ? '#fff' : 'transparent', color: tab === id ? '#3a352f' : '#9a9186', boxShadow: tab === id ? '0 1px 2px rgba(58,53,47,.06)' : 'none' }}>{label}</button>
@@ -184,8 +184,8 @@ function AccountSheet({ sx, onClose }) {
                       {(showOwnerCtl || canRemove) && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingLeft: 37 }}>
                           {showOwnerCtl && <button onClick={() => sx.actions.setRole(m.uid, m.role === 'admin' ? 'member' : 'admin').catch(() => {})} style={miniBtn}>{m.role === 'admin' ? 'Remove admin' : 'Make admin'}</button>}
-                          {showOwnerCtl && <button onClick={() => { if (window.confirm('Make ' + m.name + ' the owner? You become an admin and lose owner rights.')) sx.actions.transferOwnership(m.uid).catch(() => {}); }} style={miniBtn}>Make owner</button>}
-                          {canRemove && <button onClick={() => { if (window.confirm('Remove ' + m.name + ' from this space? They lose access (the lists stay).')) sx.actions.removeMember(m.uid).catch(() => {}); }} style={miniDanger}>Remove</button>}
+                          {showOwnerCtl && <button onClick={async () => { if (await window.TogetherUI.confirm({ title: 'Make ' + m.name + ' the owner?', message: 'You become an admin and lose owner rights.', confirmLabel: 'Make owner' })) sx.actions.transferOwnership(m.uid).catch(() => {}); }} style={miniBtn}>Make owner</button>}
+                          {canRemove && <button onClick={async () => { if (await window.TogetherUI.confirm({ title: 'Remove ' + m.name + '?', message: 'They lose access to this space (the lists stay).', confirmLabel: 'Remove', danger: true })) sx.actions.removeMember(m.uid).catch(() => {}); }} style={miniDanger}>Remove</button>}
                         </div>
                       )}
                     </div>
@@ -252,3 +252,55 @@ function AccountSheet({ sx, onClose }) {
 }
 
 window.TogetherAccount = { SignIn, Splash, HomeButton, AccountButton, AccountSheet, Avatar, memberColorByIndex };
+
+// In-app confirm/prompt dialogs (replace native window.confirm/prompt — those are
+// unstyled and window.prompt is blocked in iOS standalone/Capacitor webviews).
+// Vanilla DOM so it works from any app's scope. Promise-based:
+//   await window.TogetherUI.confirm({ title, message, confirmLabel, danger }) -> bool
+//   await window.TogetherUI.prompt({ title, message, placeholder, initial, confirmLabel }) -> string|null
+(function () {
+  if (window.TogetherUI) return;
+  const esc = (s) => String(s == null ? '' : s);
+  function dialog(opts, isPrompt) {
+    return new Promise((resolve) => {
+      const ov = document.createElement('div');
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:3000;background:rgba(58,53,47,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:18px;font-family:inherit';
+      const card = document.createElement('div');
+      card.style.cssText = 'width:100%;max-width:360px;background:#f6f4ef;border-radius:24px;box-shadow:0 24px 60px rgba(58,53,47,.34);padding:22px';
+      const h = document.createElement('div');
+      h.textContent = esc(opts.title || (isPrompt ? 'Enter a value' : 'Are you sure?'));
+      h.style.cssText = "font-family:'Quicksand',sans-serif;font-size:20px;font-weight:700;color:#3a352f;margin:0 0 6px";
+      card.appendChild(h);
+      if (opts.message) { const m = document.createElement('div'); m.textContent = esc(opts.message); m.style.cssText = 'font-size:14px;font-weight:600;color:#7a7166;line-height:1.5;margin-bottom:14px'; card.appendChild(m); }
+      let inputEl = null;
+      if (isPrompt) {
+        inputEl = document.createElement('input');
+        inputEl.type = 'text'; inputEl.value = esc(opts.initial || ''); inputEl.placeholder = esc(opts.placeholder || '');
+        inputEl.style.cssText = 'width:100%;box-sizing:border-box;background:#fff;border:1px solid #ece6db;border-radius:13px;padding:13px 14px;font-size:15px;font-family:inherit;font-weight:700;color:#3a352f;outline:none;margin-bottom:16px';
+        card.appendChild(inputEl);
+      } else { card.appendChild(Object.assign(document.createElement('div'), { style: 'height:8px' })); }
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:10px';
+      const cancel = document.createElement('button');
+      cancel.textContent = esc(opts.cancelLabel || 'Cancel');
+      cancel.style.cssText = 'flex:1;background:#fff;color:#7a7166;border:1px solid #ece6db;border-radius:13px;padding:13px;font-weight:800;font-size:14.5px;cursor:pointer;font-family:inherit;outline:none';
+      const ok = document.createElement('button');
+      ok.textContent = esc(opts.confirmLabel || (isPrompt ? 'Save' : 'Confirm'));
+      ok.style.cssText = 'flex:1.4;color:#fff;border:none;border-radius:13px;padding:13px;font-weight:800;font-size:14.5px;cursor:pointer;font-family:inherit;outline:none;background:' + (opts.danger ? '#b07a6e' : '#c98a5c');
+      row.appendChild(cancel); row.appendChild(ok); card.appendChild(row);
+      ov.appendChild(card); document.body.appendChild(ov);
+      const onKey = (e) => { if (e.key === 'Escape') done(isPrompt ? null : false); else if (e.key === 'Enter' && (isPrompt || document.activeElement !== cancel)) done(isPrompt ? inputEl.value : true); };
+      function done(val) { try { document.removeEventListener('keydown', onKey); ov.remove(); } catch (e) {} resolve(val); }
+      cancel.onclick = () => done(isPrompt ? null : false);
+      ok.onclick = () => done(isPrompt ? inputEl.value : true);
+      ov.addEventListener('mousedown', (e) => { if (e.target === ov) done(isPrompt ? null : false); });
+      document.addEventListener('keydown', onKey);
+      setTimeout(() => { if (inputEl) { inputEl.focus(); inputEl.select(); } else ok.focus(); }, 30);
+    });
+  }
+  window.TogetherUI = {
+    confirm: (opts) => dialog(opts || {}, false),
+    prompt: (opts) => dialog(opts || {}, true),
+  };
+})();

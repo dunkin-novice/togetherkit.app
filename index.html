@@ -142,7 +142,7 @@
           <a className="feature" href={'./list/?id=' + encodeURIComponent(list.id)} style={{ marginBottom: 0 }}>
             <span className="ic" style={{ fontSize: 22, lineHeight: 1, overflow: 'hidden', padding: 0 }}>{list.icon_image ? <img src={list.icon_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (list.emoji || '📋')}</span>
             <span><div className="title">{list.pinned && !list.archived ? '📌 ' : ''}{list.name}</div><div className="desc">Hold to reorder · ⋯ for options</div></span>
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onHold && onHold(); }} title="Options" style={{ marginLeft: 'auto', border: 'none', background: 'none', color: '#c3bbae', cursor: 'pointer', padding: '4px 6px', fontSize: 20, lineHeight: 1, fontWeight: 800 }}>⋯</button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onHold && onHold(); }} title="Options" aria-label="List options" style={{ marginLeft: 'auto', marginTop: -4, marginBottom: -4, marginRight: -4, border: 'none', background: 'none', color: '#c3bbae', cursor: 'pointer', padding: '8px 10px', fontSize: 20, lineHeight: 1, fontWeight: 800 }}>⋯</button>
           </a>
         </div>
       </div>
@@ -268,7 +268,7 @@
     const archiveList = (l) => updList(l.id, { archived: true });
     const unarchiveList = (l) => updList(l.id, { archived: false });
     const deleteList = async (l) => {
-      if (!window.confirm('Delete "' + l.name + '" and everything in it?')) return;
+      const ok = await window.TogetherUI.confirm({ title: 'Delete “' + l.name + '”?', message: 'This removes the list and everything in it. This can’t be undone.', confirmLabel: 'Delete', danger: true }); if (!ok) return;
       await BE.client.from('custom_items').delete().eq('list_id', l.id);
       await BE.client.from('custom_labels').delete().eq('list_id', l.id);
       await BE.client.from('custom_lists').delete().eq('id', l.id);
@@ -362,7 +362,7 @@
         {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
 
         {/* fixed bug-report button (top-right) */}
-        <button onClick={() => setBug({ open: true, sent: false, text: '' })} title="Report a problem"
+        <button onClick={() => setBug({ open: true, sent: false, text: '' })} title="Report a problem" aria-label="Report a problem"
           style={{ position: 'fixed', top: 24, right: 24, zIndex: 900, width: 46, height: 46, borderRadius: '50%', border: '1px solid #ecd9c4', background: '#fffaf3', color: '#b07d42', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(58,53,47,.08),0 8px 20px rgba(58,53,47,.12)' }}>
           <window.Icons.Bug size={21} />
         </button>
