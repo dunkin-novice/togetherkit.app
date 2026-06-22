@@ -55,7 +55,7 @@ const STARTERS = [
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const shortDate = (s) => { if (!s) return ''; const p = String(s).split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; };
 
-const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, kind: r.kind || 'lifting', durationMin: r.duration_min, intensity: r.intensity || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
+const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, kind: r.kind || 'lifting', durationMin: r.duration_min, intensity: r.intensity || null, photo: r.photo || null, videoUrl: r.video_url || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
 const rowToB = (r) => ({ id: r.id, date: r.log_date, weight: r.weight, unit: r.unit || 'kg', bodyFat: r.body_fat, muscleMass: r.muscle_mass, fatMass: r.fat_mass, photo: r.photo || null, byUser: r.by_user, byName: r.by_name });
 const rowToRoutine = (r) => ({ id: r.id, name: r.name, exercises: Array.isArray(r.exercises) ? r.exercises : [], byUser: r.by_user, byName: r.by_name });
 const emptyRRow = (unit) => ({ ex: '', sets: '', reps: '', weight: '', unit: unit || 'kg' });
@@ -195,6 +195,8 @@ function useFitnessStore(homespaceId, me) {
         }
         return { id: BE.newId(), exercise: ex, kind: 'lifting', weight: b.weight === '' ? null : Number(b.weight), unit: b.unit, reps: b.reps === '' ? null : Number(b.reps), sets: b.sets === '' ? null : Number(b.sets), setsDetail: null, date: sess.date, byUser: m.uid, byName: m.name };
       });
+      // attach session media to the first row (one photo/video per logged session)
+      if (rows.length && (sess.photo || sess.videoUrl)) { rows[0].photo = sess.photo || null; rows[0].videoUrl = sess.videoUrl || null; }
       // detect new personal records (heaviest ever for me on that exercise)
       const myPrev = {}; s.workouts.filter(w => w.byUser === m.uid).forEach(w => { const mw = maxW(w); if (mw == null) return; if (myPrev[w.exercise] == null || mw > myPrev[w.exercise]) myPrev[w.exercise] = mw; });
       const prHits = [];
@@ -202,7 +204,7 @@ function useFitnessStore(homespaceId, me) {
       const toast = prHits.length ? ('🏆 New PR! ' + prHits.join(' · ')) : null;
       patch(st => ({ workouts: [...st.workouts, ...rows].sort((a, b) => (a.date < b.date ? -1 : 1)), wAddOpen: false, exFocusKey: null, prToast: toast, graphExercise: st.graphExercise || rows[0].exercise, wSession: { date: today(), blocks: [emptyWBlock((sess.blocks.slice(-1)[0] || {}).unit)] } }));
       if (toast) setTimeout(() => patch({ prToast: null }), 4000);
-      rows.forEach(w => db(client.from('fitness_logs').insert({ id: w.id, homespace_id: homespaceId, exercise: w.exercise, kind: w.kind || 'lifting', duration_min: w.durationMin == null ? null : w.durationMin, intensity: w.intensity || null, weight: w.weight, unit: w.unit, reps: w.reps, sets: w.sets, sets_detail: w.setsDetail, log_date: w.date, by_user: w.byUser, by_name: w.byName, pos: Date.now() })));
+      rows.forEach(w => db(client.from('fitness_logs').insert({ id: w.id, homespace_id: homespaceId, exercise: w.exercise, kind: w.kind || 'lifting', duration_min: w.durationMin == null ? null : w.durationMin, intensity: w.intensity || null, weight: w.weight, unit: w.unit, reps: w.reps, sets: w.sets, sets_detail: w.setsDetail, photo: w.photo || null, video_url: w.videoUrl || null, log_date: w.date, by_user: w.byUser, by_name: w.byName, pos: Date.now() })));
     },
     repeatLast: () => {
       const s = ref.current, m = meRef.current || { uid: null };
@@ -475,6 +477,7 @@ function AddWorkout({ v, primary }) {
   if (!v.s.wAddOpen) return null;
   const sess = v.s.wSession;
   const close = () => v.a.set({ wAddOpen: false, exFocusKey: null });
+  const onPhoto = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const img = new Image(); img.onload = () => { const S = 720, ratio = Math.min(1, S / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = img.width * ratio; c.height = img.height * ratio; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); v.a.setSession({ photo: c.toDataURL('image/jpeg', 0.82) }); }; img.src = r.result; }; r.readAsDataURL(f); };
   const UnitToggle = ({ b, i }) => <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid #ece6db', flexShrink: 0 }}>{UNITS.map(u => <button key={u} onClick={() => v.a.setBlock(i, { unit: u })} style={{ border: 'none', padding: '0 11px', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', background: b.unit === u ? primary : '#fff', color: b.unit === u ? '#fff' : '#9a9186' }}>{u}</button>)}</div>;
   return (
     <Overlay onClose={close}>
@@ -556,6 +559,12 @@ function AddWorkout({ v, primary }) {
             <button onClick={v.a.saveSessionAsRoutine} title="Save as routine" style={{ flexShrink: 0, border: '1px solid #e6ded2', background: '#fff', color: '#7a7166', borderRadius: 13, padding: '12px 14px', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>☆ Save as routine</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ ...upper, flexShrink: 0 }}>Date</span><input value={sess.date} onChange={(e) => v.a.setSession({ date: e.target.value })} type="date" style={{ ...fieldInput, flex: 1 }} /></div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', border: '1px solid #ece6db', background: '#fff', borderRadius: 13, padding: 9 }}>
+            <span style={{ width: 46, height: 46, borderRadius: 10, background: '#f2ece2', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{sess.photo ? <img src={sess.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📷'}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: '#7a7166' }}>{sess.photo ? 'Photo added — tap to change' : 'Add a photo (optional)'}</span>
+            <input type="file" accept="image/*" onChange={onPhoto} style={{ display: 'none' }} />
+          </label>
+          <input value={sess.videoUrl || ''} onChange={(e) => v.a.setSession({ videoUrl: e.target.value })} type="url" inputMode="url" placeholder="🎥 Video link (optional)" style={fieldInput} />
         </div>
         <div style={{ padding: '14px 18px 20px', display: 'flex', gap: 10 }}><button onClick={close} style={cancelBtn}>Cancel</button><button onClick={v.a.addSession} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Save workout</button></div>
       </Sheet>
@@ -948,6 +957,12 @@ function SessionsView({ v }) {
               <button onClick={() => v.a.set({ sessionOpen: null })} aria-label="Close" style={closeX}>×</button>
             </div>
             <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px 22px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(() => { const ph = open.items.filter(w => w.photo); const vids = open.items.filter(w => w.videoUrl); return (ph.length || vids.length) ? (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                  {ph.map(w => <img key={w.id} src={w.photo} alt="" style={{ width: 88, height: 88, borderRadius: 12, objectFit: 'cover' }} />)}
+                  {vids.map(w => <a key={w.id} href={w.videoUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 88, padding: '0 16px', borderRadius: 12, background: '#f2ece2', color: '#a8794f', fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>🎥 Video</a>)}
+                </div>
+              ) : null; })()}
               {open.items.map(w => (
                 <div key={w.id} style={{ background: '#fff', border: '1px solid #f0ebe2', borderRadius: 13, padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
