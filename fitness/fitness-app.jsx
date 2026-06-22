@@ -19,12 +19,24 @@ const ACTIVITY_CAT = {}; ACTIVITIES.forEach(a => { ACTIVITY_CAT[a.name] = a.cat;
 const ACTIVITY_MET = { Running: { low: 8.3, moderate: 9.8, high: 11.8 }, Cycling: { low: 4, moderate: 8, high: 10 }, 'Rowing Machine': { low: 5, moderate: 7, high: 8.5 }, Elliptical: { low: 4, moderate: 5, high: 7 }, Swimming: { low: 6, moderate: 7, high: 8.3 }, Walking: { low: 2.8, moderate: 3.5, high: 4.3 }, 'Jump Rope': { low: 8.8, moderate: 11.8, high: 12.3 }, Yoga: { low: 2.5, moderate: 3, high: 4 }, HIIT: { low: 6, moderate: 8, high: 10 }, 'Stair Climber': { low: 4, moderate: 7, high: 9 }, Badminton: { low: 4.5, moderate: 5.5, high: 7 }, Football: { low: 7, moderate: 8, high: 10 }, Basketball: { low: 6, moderate: 6.5, high: 8 }, Tennis: { low: 5, moderate: 6, high: 8 }, 'Table Tennis': { low: 4, moderate: 4.5, high: 6 }, Volleyball: { low: 3, moderate: 4, high: 6 } };
 const metFor = (name, intensity) => { const m = ACTIVITY_MET[name]; if (!m) return 6; return m[intensity] || m.moderate || 6; };
 const INTENSITY = [{ k: 'low', l: 'Low', d: 'Casual / easy pace' }, { k: 'moderate', l: 'Moderate', d: 'Steady, breaking a sweat' }, { k: 'high', l: 'High', d: 'Hard / competitive' }];
+// climbing (bouldering) — V-scale sends; score = Σ count × 2^(V+1) (a hard send dominates a pile of easy ones)
+const VGRADES = Array.from({ length: 16 }, (_, i) => 'V' + i); // V0..V15
+const CLIMB_ACTIVITIES = ['Bouldering', 'Rock Climbing'];
+const CLIMB_SET = {}; CLIMB_ACTIVITIES.forEach(n => { CLIMB_SET[n] = true; });
+const climbPoints = (grades) => Object.keys(grades || {}).reduce((a, g) => { const v = parseInt(g.slice(1), 10); const c = Number(grades[g]) || 0; return a + (isNaN(v) ? 0 : c * Math.pow(2, v + 1)); }, 0);
+const climbSummary = (grades) => {
+  const keys = Object.keys(grades || {}).filter(g => Number(grades[g]) > 0).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
+  if (!keys.length) return 'logged';
+  const total = keys.reduce((a, g) => a + Number(grades[g]), 0);
+  return keys.map(g => g + '×' + grades[g]).join(', ') + ' · ' + total + ' send' + (total === 1 ? '' : 's') + ' · top ' + keys[keys.length - 1];
+};
 const intensityDesc = (k) => (INTENSITY.find(i => i.k === k) || INTENSITY[1]).d;
 // leaderboard metrics — all "higher is better"; designed so a lighter partner can still win
 const LB_METRICS = [
   { key: 'volumeWeek', label: 'Volume', sub: 'this week', fmt: (v) => v ? v.toLocaleString() + ' kg' : '0' },
   { key: 'sessionsWeek', label: 'Sessions', sub: 'this week', fmt: (v) => (v || 0) + '×' },
   { key: 'kcalWeek', label: 'Calories', sub: 'this week', fmt: (v) => '🔥 ' + (v || 0).toLocaleString() },
+  { key: 'climbWeek', label: 'Climbing', sub: 'send points · this week', fmt: (v) => v ? v.toLocaleString() + ' pts' : '0' },
   { key: 'relStrength', label: 'Strength', sub: 'best 1RM ÷ bodyweight', fmt: (v) => v == null ? '—' : v + '×' },
   { key: 'fatImprov', label: 'Fat lost', sub: 'since first log', fmt: (v) => v == null ? '—' : (v > 0 ? '−' + v : (v < 0 ? '+' + (-v) : '0')) + '%' },
 ];
@@ -55,13 +67,13 @@ const STARTERS = [
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const shortDate = (s) => { if (!s) return ''; const p = String(s).split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; };
 
-const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, kind: r.kind || 'lifting', durationMin: r.duration_min, intensity: r.intensity || null, photo: r.photo || null, videoUrl: r.video_url || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
+const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, kind: r.kind || 'lifting', durationMin: r.duration_min, intensity: r.intensity || null, grades: r.grades || null, photo: r.photo || null, videoUrl: r.video_url || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
 const rowToB = (r) => ({ id: r.id, date: r.log_date, weight: r.weight, unit: r.unit || 'kg', bodyFat: r.body_fat, muscleMass: r.muscle_mass, fatMass: r.fat_mass, photo: r.photo || null, byUser: r.by_user, byName: r.by_name });
 const rowToRoutine = (r) => ({ id: r.id, name: r.name, exercises: Array.isArray(r.exercises) ? r.exercises : [], byUser: r.by_user, byName: r.by_name });
 const emptyRRow = (unit) => ({ ex: '', sets: '', reps: '', weight: '', unit: unit || 'kg' });
 // heaviest weight in an entry (handles per-set detail / drop sets)
 const maxW = (w) => { if (w.setsDetail && w.setsDetail.length) { const ws = w.setsDetail.map(s => Number(s.weight)).filter(x => !isNaN(x)); return ws.length ? Math.max(...ws) : null; } return w.weight != null ? Number(w.weight) : null; };
-const emptyWBlock = (unit) => ({ ex: '', unit: unit || 'kg', kind: 'lifting', mode: 'simple', sets: '', reps: '', weight: '', duration: '', intensity: 'moderate', rows: [{ weight: '', reps: '', drop: false }] });
+const emptyWBlock = (unit) => ({ ex: '', unit: unit || 'kg', kind: 'lifting', mode: 'simple', sets: '', reps: '', weight: '', duration: '', intensity: 'moderate', climbRows: [{ grade: 'V3', count: '' }], rows: [{ weight: '', reps: '', drop: false }] });
 // estimated 1-rep-max (Epley) — best set in an entry
 const e1rmOf = (w) => {
   const calc = (wt, rp) => { const n = Number(wt); if (isNaN(n)) return null; const r = Number(rp); return n * (1 + (isNaN(r) ? 0 : r) / 30); };
@@ -82,6 +94,7 @@ let _actx = null;
 const beep = () => { try { _actx = _actx || new (window.AudioContext || window.webkitAudioContext)(); const o = _actx.createOscillator(), g = _actx.createGain(); o.connect(g); g.connect(_actx.destination); o.frequency.value = 880; g.gain.value = 0.07; o.start(); setTimeout(() => { o.frequency.value = 1100; }, 90); setTimeout(() => o.stop(), 200); } catch (e) {} };
 // summarise an entry for the list card
 const setsText = (w) => {
+  if (w.kind === 'climb') return climbSummary(w.grades);
   if (w.kind === 'cardio') { const p = []; if (w.durationMin != null) p.push(w.durationMin + ' min'); if (w.intensity) p.push(w.intensity); return p.join(' · ') || 'logged'; }
   if (w.setsDetail && w.setsDetail.length) return w.setsDetail.map(s => (s.weight != null ? s.weight : '–') + '×' + (s.reps != null ? s.reps : '–') + (s.drop ? ' drop' : '')).join(', ');
   const parts = [];
@@ -168,8 +181,9 @@ function useFitnessStore(homespaceId, me) {
       patch(st => ({ exFocusKey: null, wSession: { ...st.wSession, blocks: st.wSession.blocks.map((b, k) => {
         if (k !== i) return b;
         const nb = { ...b, ex: name };
-        // auto-detect a time-based activity (cardio/sport) and switch the block to Time mode
-        if (ACTIVITY_CAT[name]) { nb.kind = 'cardio'; if (last && last.kind === 'cardio' && b.duration === '') { nb.duration = last.durationMin == null ? '' : String(last.durationMin); nb.intensity = last.intensity || b.intensity; } }
+        // auto-detect the activity kind and switch the block's mode
+        if (CLIMB_SET[name]) { nb.kind = 'climb'; }
+        else if (ACTIVITY_CAT[name]) { nb.kind = 'cardio'; if (last && last.kind === 'cardio' && b.duration === '') { nb.duration = last.durationMin == null ? '' : String(last.durationMin); nb.intensity = last.intensity || b.intensity; } }
         else { nb.kind = 'lifting'; if (last && last.kind !== 'cardio' && b.mode === 'simple' && b.weight === '' && b.reps === '' && b.sets === '') { nb.weight = last.weight == null ? '' : String(last.weight); nb.reps = last.reps == null ? '' : String(last.reps); nb.sets = last.sets == null ? '' : String(last.sets); nb.unit = last.unit || b.unit; } }
         return nb;
       }) } }));
@@ -179,12 +193,19 @@ function useFitnessStore(homespaceId, me) {
     setRow: (i, j, p) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, rows: b.rows.map((r, rj) => rj === j ? { ...r, ...p } : r) } : b) } })),
     addRow: (i) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, rows: [...b.rows, { weight: (b.rows.slice(-1)[0] || {}).weight || '', reps: '', drop: false }] } : b) } })),
     removeRow: (i, j) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, rows: b.rows.length > 1 ? b.rows.filter((_, rj) => rj !== j) : b.rows } : b) } })),
+    setClimbRow: (i, j, p) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, climbRows: b.climbRows.map((r, rj) => rj === j ? { ...r, ...p } : r) } : b) } })),
+    addClimbRow: (i) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, climbRows: [...b.climbRows, { grade: 'V4', count: '' }] } : b) } })),
+    removeClimbRow: (i, j) => patch(s => ({ wSession: { ...s.wSession, blocks: s.wSession.blocks.map((b, k) => k === i ? { ...b, climbRows: b.climbRows.length > 1 ? b.climbRows.filter((_, rj) => rj !== j) : b.climbRows } : b) } })),
     addSession: () => {
       const s = ref.current, sess = s.wSession, m = meRef.current || { uid: null, name: 'Me' };
       const valid = sess.blocks.filter(b => (b.ex || '').trim());
       if (!valid.length) return;
       const rows = valid.map(b => {
         const ex = b.ex.trim();
+        if (b.kind === 'climb') {
+          const grades = {}; (b.climbRows || []).forEach(r => { const c = Number(r.count); if (r.grade && c > 0) grades[r.grade] = (grades[r.grade] || 0) + c; });
+          return { id: BE.newId(), exercise: ex, kind: 'climb', grades, weight: null, unit: b.unit, reps: null, sets: null, setsDetail: null, date: sess.date, byUser: m.uid, byName: m.name };
+        }
         if (b.kind === 'cardio') {
           return { id: BE.newId(), exercise: ex, kind: 'cardio', durationMin: b.duration === '' ? null : Number(b.duration), intensity: b.intensity || 'moderate', weight: null, unit: b.unit, reps: null, sets: null, setsDetail: null, date: sess.date, byUser: m.uid, byName: m.name };
         }
@@ -204,14 +225,16 @@ function useFitnessStore(homespaceId, me) {
       const toast = prHits.length ? ('🏆 New PR! ' + prHits.join(' · ')) : null;
       patch(st => ({ workouts: [...st.workouts, ...rows].sort((a, b) => (a.date < b.date ? -1 : 1)), wAddOpen: false, exFocusKey: null, prToast: toast, graphExercise: st.graphExercise || rows[0].exercise, wSession: { date: today(), blocks: [emptyWBlock((sess.blocks.slice(-1)[0] || {}).unit)] } }));
       if (toast) setTimeout(() => patch({ prToast: null }), 4000);
-      rows.forEach(w => db(client.from('fitness_logs').insert({ id: w.id, homespace_id: homespaceId, exercise: w.exercise, kind: w.kind || 'lifting', duration_min: w.durationMin == null ? null : w.durationMin, intensity: w.intensity || null, weight: w.weight, unit: w.unit, reps: w.reps, sets: w.sets, sets_detail: w.setsDetail, photo: w.photo || null, video_url: w.videoUrl || null, log_date: w.date, by_user: w.byUser, by_name: w.byName, pos: Date.now() })));
+      rows.forEach(w => db(client.from('fitness_logs').insert({ id: w.id, homespace_id: homespaceId, exercise: w.exercise, kind: w.kind || 'lifting', duration_min: w.durationMin == null ? null : w.durationMin, intensity: w.intensity || null, grades: w.grades || null, weight: w.weight, unit: w.unit, reps: w.reps, sets: w.sets, sets_detail: w.setsDetail, photo: w.photo || null, video_url: w.videoUrl || null, log_date: w.date, by_user: w.byUser, by_name: w.byName, pos: Date.now() })));
     },
     repeatLast: () => {
       const s = ref.current, m = meRef.current || { uid: null };
       const mine = s.workouts.filter(w => w.byUser === m.uid);
       if (!mine.length) return;
       const lastDate = mine.reduce((a, w) => (w.date > a ? w.date : a), mine[0].date);
-      const blocks = mine.filter(w => w.date === lastDate).map(w => w.kind === 'cardio'
+      const blocks = mine.filter(w => w.date === lastDate).map(w => w.kind === 'climb'
+        ? { ...emptyWBlock(w.unit), ex: w.exercise, kind: 'climb', climbRows: (Object.keys(w.grades || {}).length ? Object.keys(w.grades).map(g => ({ grade: g, count: String(w.grades[g]) })) : [{ grade: 'V3', count: '' }]) }
+        : w.kind === 'cardio'
         ? { ...emptyWBlock(w.unit), ex: w.exercise, kind: 'cardio', duration: w.durationMin == null ? '' : String(w.durationMin), intensity: w.intensity || 'moderate' }
         : (w.setsDetail && w.setsDetail.length)
           ? { ...emptyWBlock(w.unit), ex: w.exercise, unit: w.unit, mode: 'detail', rows: w.setsDetail.map(r => ({ weight: r.weight == null ? '' : String(r.weight), reps: r.reps == null ? '' : String(r.reps), drop: !!r.drop })) }
@@ -409,7 +432,7 @@ function buildView(state, actions, opts) {
 
   // ── sessions: group each person's sets on a day into one "Chest Day"-style card ──
   const exMusclesV = {}; (state.exLib || []).forEach(x => { exMusclesV[x.name.toLowerCase()] = x.muscles || []; });
-  const groupOfV = (name) => { if (ACTIVITY_CAT[name]) return ACTIVITY_CAT[name]; const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
+  const groupOfV = (name) => { if (CLIMB_SET[name]) return 'Climb'; if (ACTIVITY_CAT[name]) return ACTIVITY_CAT[name]; const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
   const itemVol = (w) => { if (w.setsDetail && w.setsDetail.length) return w.setsDetail.reduce((a, r) => a + ((Number(r.weight) || 0) * (Number(r.reps) || 0)), 0); const mw = maxW(w); return (mw || 0) * (Number(w.reps) || 0) * (w.sets || 1); };
   const sessMap = {};
   workoutsByDate.forEach(w => { const k = (w.byUser || 'x') + '|' + w.date; (sessMap[k] = sessMap[k] || { key: k, byUser: w.byUser, date: w.date, color: w.color, initial: w.initial, who: w.who, mine: w.mine, items: [] }).items.push(w); });
@@ -437,6 +460,7 @@ function buildView(state, actions, opts) {
       uid: p.uid, name: p.name, color: p.color, initial: p.initial,
       volumeWeek: Math.round(wk.reduce((a, w) => a + itemVol(w), 0)),
       kcalWeek: wk.reduce((a, w) => a + (calOf(w) || 0), 0),
+      climbWeek: wk.reduce((a, w) => a + (w.kind === 'climb' ? climbPoints(w.grades || {}) : 0), 0),
       sessionsWeek: ((weekDays.find(d => d.uid === p.uid) || {}).days) || 0,
       relStrength: (kg && e1rmMax > 0) ? Math.round((e1rmMax / kg) * 100) / 100 : null,
       fatImprov: fats.length >= 2 ? Math.round((fats[0].bodyFat - fats[fats.length - 1].bodyFat) * 10) / 10 : null,
@@ -454,7 +478,7 @@ function buildView(state, actions, opts) {
     compare: { people: comparePeople, prRows, streak, thisWeekBoth, consistency, muscleFocus, weekDays, goal: state.fitGoal, leaderboard: lbMembers },
     exSuggestions: (q) => {
       const t = (q || '').toLowerCase().trim();
-      const acts = ACTIVITIES.map(a => ({ name: a.name, sub: a.cat.toLowerCase(), kind: 'cardio' }));
+      const acts = ACTIVITIES.map(a => ({ name: a.name, sub: a.cat.toLowerCase(), kind: 'cardio' })).concat(CLIMB_ACTIVITIES.map(n => ({ name: n, sub: 'climbing', kind: 'climb' })));
       const lib = acts.concat((state.exLib && state.exLib.length) ? state.exLib : EXERCISES.map(n => ({ name: n, sub: '' })));
       if (!t) {
         const mine = (me ? state.workouts.filter(w => w.byUser === me.uid) : []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -499,7 +523,7 @@ function AddWorkout({ v, primary }) {
                   {(() => { const lf = v.lastFor(b.ex); return lf ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#b3a99c', margin: '4px 2px 0' }}>Last time: {setsText(lf)} · {shortDate(lf.date)}</div> : null; })()}
                 </div>
                 <div style={{ display: 'flex', gap: 5, background: '#f3ece1', borderRadius: 10, padding: 3 }}>
-                  {[{ k: 'lifting', l: '🏋️ Reps' }, { k: 'cardio', l: '⏱ Time' }].map(o => { const on = b.kind === o.k || (o.k === 'lifting' && b.kind !== 'cardio'); return <button key={o.k} onClick={() => v.a.setBlock(i, { kind: o.k })} style={{ flex: 1, border: 'none', borderRadius: 8, padding: '7px 4px', fontFamily: 'inherit', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', background: on ? '#fff' : 'transparent', color: on ? '#3a352f' : '#9a9186' }}>{o.l}</button>; })}
+                  {[{ k: 'lifting', l: '🏋️ Reps' }, { k: 'cardio', l: '⏱ Time' }, { k: 'climb', l: '🧗 Climb' }].map(o => { const on = (b.kind || 'lifting') === o.k; return <button key={o.k} onClick={() => v.a.setBlock(i, { kind: o.k })} style={{ flex: 1, border: 'none', borderRadius: 8, padding: '7px 3px', fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', background: on ? '#fff' : 'transparent', color: on ? '#3a352f' : '#9a9186' }}>{o.l}</button>; })}
                 </div>
                 {b.kind === 'cardio' ? (
                   <Fragment>
@@ -509,6 +533,22 @@ function AddWorkout({ v, primary }) {
                       <div style={{ display: 'flex', gap: 5 }}>{INTENSITY.map(it => <button key={it.k} onClick={() => v.a.setBlock(i, { intensity: it.k })} style={{ flex: 1, border: '1px solid ' + (b.intensity === it.k ? primary : '#ece6db'), background: b.intensity === it.k ? primary : '#fff', color: b.intensity === it.k ? '#fff' : '#9a9186', borderRadius: 10, padding: '9px 4px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{it.l}</button>)}</div>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#b3a99c', margin: '5px 2px 0' }}>{intensityDesc(b.intensity)}</div>
                     </div>
+                  </Fragment>
+                ) : b.kind === 'climb' ? (
+                  <Fragment>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 2, textTransform: 'uppercase' }}>Sends by grade</div>
+                    {(b.climbRows || []).map((r, j) => (
+                      <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <select value={r.grade} onChange={(e) => v.a.setClimbRow(i, j, { grade: e.target.value })} style={{ ...selStyle, width: '100%' }}>{VGRADES.map(g => <option key={g} value={g}>{g}</option>)}</select>
+                          <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#b3a99c' }}><FI.Chevron size={12} /></span>
+                        </div>
+                        <span style={{ color: '#c3bbae', fontWeight: 800 }}>×</span>
+                        <input value={r.count} onChange={(e) => v.a.setClimbRow(i, j, { count: e.target.value })} onFocus={focusScroll} type="number" inputMode="numeric" placeholder="sends" style={{ ...numIn, flex: 1 }} />
+                        {b.climbRows.length > 1 && <button onClick={() => v.a.removeClimbRow(i, j)} aria-label="Remove grade" style={{ border: 'none', background: 'none', color: '#cbb9a2', fontSize: 16, cursor: 'pointer', padding: '8px 6px', lineHeight: 1, flexShrink: 0 }}>×</button>}
+                      </div>
+                    ))}
+                    <button onClick={() => v.a.addClimbRow(i)} style={{ alignSelf: 'flex-start', border: '1px dashed #d9cbb7', background: 'none', color: '#a8794f', borderRadius: 9, padding: '6px 12px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add grade</button>
                   </Fragment>
                 ) : (
                 <Fragment>
