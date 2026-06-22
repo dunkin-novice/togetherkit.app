@@ -21,6 +21,12 @@ const EXERCISES = [
   'Treadmill', 'Cycling', 'Rowing', 'Elliptical',
 ];
 const STARTERS = [
+  { name: 'Chest Day', exercises: [{ ex: 'Bench Press', sets: 4, reps: 8 }, { ex: 'Incline Bench Press', sets: 3, reps: 10 }, { ex: 'Chest Fly', sets: 3, reps: 12 }, { ex: 'Dip', sets: 3, reps: 10 }, { ex: 'Push-up', sets: 3, reps: 15 }] },
+  { name: 'Back Day', exercises: [{ ex: 'Deadlift', sets: 3, reps: 5 }, { ex: 'Pull-up', sets: 4, reps: 8 }, { ex: 'Barbell Row', sets: 4, reps: 8 }, { ex: 'Lat Pulldown', sets: 3, reps: 12 }, { ex: 'Seated Row', sets: 3, reps: 12 }] },
+  { name: 'Leg Day', exercises: [{ ex: 'Squat', sets: 4, reps: 6 }, { ex: 'Romanian Deadlift', sets: 3, reps: 8 }, { ex: 'Leg Press', sets: 3, reps: 10 }, { ex: 'Lunge', sets: 3, reps: 10 }, { ex: 'Leg Curl', sets: 3, reps: 12 }, { ex: 'Calf Raise', sets: 4, reps: 15 }] },
+  { name: 'Shoulder Day', exercises: [{ ex: 'Overhead Press', sets: 4, reps: 8 }, { ex: 'Lateral Raise', sets: 4, reps: 15 }, { ex: 'Front Raise', sets: 3, reps: 12 }, { ex: 'Arnold Press', sets: 3, reps: 10 }, { ex: 'Shrug', sets: 3, reps: 15 }] },
+  { name: 'Arm Day', exercises: [{ ex: 'Bicep Curl', sets: 4, reps: 12 }, { ex: 'Hammer Curl', sets: 3, reps: 12 }, { ex: 'Preacher Curl', sets: 3, reps: 12 }, { ex: 'Tricep Pushdown', sets: 4, reps: 12 }, { ex: 'Tricep Extension', sets: 3, reps: 12 }] },
+  { name: 'Core Day', exercises: [{ ex: 'Plank', sets: 3, reps: 1 }, { ex: 'Crunch', sets: 3, reps: 20 }, { ex: 'Leg Raise', sets: 3, reps: 15 }, { ex: 'Russian Twist', sets: 3, reps: 20 }, { ex: 'Cable Crunch', sets: 3, reps: 15 }] },
   { name: 'Full Body', exercises: [{ ex: 'Squat', sets: 3, reps: 8 }, { ex: 'Bench Press', sets: 3, reps: 8 }, { ex: 'Barbell Row', sets: 3, reps: 8 }, { ex: 'Overhead Press', sets: 3, reps: 10 }, { ex: 'Deadlift', sets: 1, reps: 5 }] },
   { name: 'Upper', exercises: [{ ex: 'Bench Press', sets: 4, reps: 6 }, { ex: 'Barbell Row', sets: 4, reps: 6 }, { ex: 'Overhead Press', sets: 3, reps: 8 }, { ex: 'Lat Pulldown', sets: 3, reps: 10 }, { ex: 'Bicep Curl', sets: 3, reps: 12 }, { ex: 'Tricep Pushdown', sets: 3, reps: 12 }] },
   { name: 'Lower', exercises: [{ ex: 'Squat', sets: 4, reps: 6 }, { ex: 'Romanian Deadlift', sets: 3, reps: 8 }, { ex: 'Leg Press', sets: 3, reps: 10 }, { ex: 'Leg Curl', sets: 3, reps: 12 }, { ex: 'Calf Raise', sets: 4, reps: 15 }] },
@@ -171,6 +177,13 @@ function useFitnessStore(homespaceId, me) {
         : { ex: w.exercise, unit: w.unit, mode: 'simple', sets: w.sets == null ? '' : String(w.sets), reps: w.reps == null ? '' : String(w.reps), weight: w.weight == null ? '' : String(w.weight), rows: [{ weight: '', reps: '', drop: false }] });
       patch({ wSession: { date: today(), blocks: blocks.length ? blocks : [emptyWBlock('kg')] }, wAddOpen: true, exFocusKey: null });
     },
+    duplicateWorkout: (id) => {
+      const s = ref.current, m = meRef.current || { uid: null, name: 'Me' };
+      const w = s.workouts.find(x => x.id === id); if (!w) return;
+      const nw = { id: BE.newId(), exercise: w.exercise, weight: w.weight, unit: w.unit, reps: w.reps, sets: w.sets, setsDetail: w.setsDetail, byUser: m.uid, byName: m.name, date: today() };
+      patch(st => ({ workouts: [...st.workouts, nw] }));
+      db(client.from('fitness_logs').insert({ id: nw.id, homespace_id: homespaceId, exercise: nw.exercise, weight: nw.weight, unit: nw.unit, reps: nw.reps, sets: nw.sets, sets_detail: nw.setsDetail, log_date: nw.date, by_user: m.uid, by_name: m.name, pos: Date.now() }));
+    },
     // ── routines / templates ──
     newRoutine: () => patch({ routineEdit: { id: null, name: '', rows: [emptyRRow('kg')] } }),
     editRoutine: (id) => { const r = ref.current.routines.find(x => x.id === id); if (!r) return; patch({ routineEdit: { id, name: r.name, rows: r.exercises.length ? r.exercises.map(e => ({ ex: e.ex || e.exercise || '', sets: e.sets == null ? '' : String(e.sets), reps: e.reps == null ? '' : String(e.reps), weight: e.weight == null ? '' : String(e.weight), unit: e.unit || 'kg' })) : [emptyRRow('kg')] } }); },
@@ -308,7 +321,7 @@ function buildView(state, actions, opts) {
   const prIds = new Set(Object.keys(bestKey).map(k => bestKey[k].id));
   const reactsByLog = {}; state.reactions.forEach(r => { (reactsByLog[r.logId] = reactsByLog[r.logId] || []).push(r); });
   const groupReacts = (logId) => { const rs = reactsByLog[logId] || []; const by = {}; rs.forEach(r => { by[r.emoji] = by[r.emoji] || { emoji: r.emoji, count: 0, mine: false, names: [] }; by[r.emoji].count++; if (me && r.userId === me.uid) by[r.emoji].mine = true; by[r.emoji].names.push(r.byName); }); return Object.keys(by).map(e => by[e]); };
-  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), isPR: prIds.has(w.id), reactions: groupReacts(w.id), mine: !!(me && w.byUser === me.uid), react: (emoji) => actions.toggleReaction(w.id, emoji), edit: () => actions.startEditWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
+  const workoutsByDate = state.workouts.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(w => ({ ...w, color: colorOf(w.byUser), initial: initialOf(w.byUser, w.byName), who: nameOf(w.byUser, w.byName), summary: setsText(w), isPR: prIds.has(w.id), reactions: groupReacts(w.id), mine: !!(me && w.byUser === me.uid), react: (emoji) => actions.toggleReaction(w.id, emoji), edit: () => actions.startEditWorkout(w.id), duplicate: () => actions.duplicateWorkout(w.id), remove: () => actions.removeWorkout(w.id) }));
   const bodyByDate = state.body.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(b => ({ ...b, color: colorOf(b.byUser), initial: initialOf(b.byUser, b.byName), who: nameOf(b.byUser, b.byName), remove: () => actions.removeBody(b.id) }));
 
   // ── her-vs-you comparison ──
@@ -790,6 +803,7 @@ function Board({ v, isDesktop, primary, partner }) {
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
                   </div>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186' }}><Avi color={w.color} initial={w.initial} />{shortDate(w.date)}</span>
+                  <button onClick={(ev) => { ev.stopPropagation(); w.duplicate(); }} title="Duplicate to today" aria-label="Duplicate to today" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 8, lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
                   <button onClick={(ev) => { ev.stopPropagation(); w.remove(); }} title="Delete" aria-label="Delete workout" style={{ border: 'none', background: 'none', color: '#cbb9a2', cursor: 'pointer', padding: 8, lineHeight: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FI.Trash size={16} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
