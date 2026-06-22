@@ -82,6 +82,7 @@ function useFitnessStore(homespaceId, me) {
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', photo: null, date: today(), advanced: false },
     photoCompare: false,
     graphExercise: '', bodyMetric: 'weight', workoutMetric: 'weight', exLib: [], fitGoal: 3,
+    fitProfiles: {}, fpEditOpen: false, fpDraft: { height_cm: '', weight_kg: '', birth_year: '', sex: '', stats_visible: true },
   }));
   const patch = (p) => setState(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   const ref = useRef(state); ref.current = state;
@@ -98,15 +99,17 @@ function useFitnessStore(homespaceId, me) {
   useEffect(() => {
     if (!homespaceId) return; let alive = true; patch({ syncing: true });
     const refetch = async () => {
-      const [w, b, rt, rx, hg] = await Promise.all([
+      const [w, b, rt, rx, hg, fpr] = await Promise.all([
         client.from('fitness_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('body_logs').select('*').eq('homespace_id', homespaceId).order('log_date', { ascending: true }),
         client.from('fitness_routines').select('*').eq('homespace_id', homespaceId).order('pos', { ascending: true }),
         client.from('fitness_reactions').select('*').eq('homespace_id', homespaceId),
         client.from('homespaces').select('fit_goal').eq('id', homespaceId).maybeSingle(),
+        client.from('fitness_profiles').select('*'),
       ]);
       if (!alive) return;
-      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), reactions: (rx.data || []).map(r => ({ logId: r.log_id, userId: r.user_id, emoji: r.emoji, byName: r.by_name })), fitGoal: (hg.data && hg.data.fit_goal) || 3, syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
+      const fp = {}; (fpr.data || []).forEach(p => { fp[p.user_id] = p; });
+      patch(s => ({ workouts: (w.data || []).map(rowToW), body: (b.data || []).map(rowToB), routines: (rt.data || []).map(rowToRoutine), reactions: (rx.data || []).map(r => ({ logId: r.log_id, userId: r.user_id, emoji: r.emoji, byName: r.by_name })), fitGoal: (hg.data && hg.data.fit_goal) || 3, fitProfiles: fp, syncing: false, graphExercise: s.graphExercise || ((w.data || []).slice(-1)[0] || {}).exercise || '' }));
     };
     refetch();
     const ch = client.channel('fitness:' + homespaceId)
@@ -124,6 +127,15 @@ function useFitnessStore(homespaceId, me) {
     addRest: (sec) => patch(s => ({ rest: s.rest ? { ...s.rest, endsAt: s.rest.endsAt + sec * 1000, total: s.rest.total + sec } : { endsAt: Date.now() + sec * 1000, total: sec } })),
     stopRest: () => patch({ rest: null }),
     setGoal: (n) => { const g = Math.max(1, Math.min(14, n)); patch({ fitGoal: g }); db(client.from('homespaces').update({ fit_goal: g }).eq('id', homespaceId)); },
+    openFpEdit: () => { const m = meRef.current || {}; const p = (ref.current.fitProfiles || {})[m.uid] || {}; patch({ fpEditOpen: true, fpDraft: { height_cm: p.height_cm == null ? '' : String(p.height_cm), weight_kg: p.weight_kg == null ? '' : String(p.weight_kg), birth_year: p.birth_year == null ? '' : String(p.birth_year), sex: p.sex || '', stats_visible: p.stats_visible == null ? true : !!p.stats_visible } }); },
+    setFpDraft: (p) => patch(s => ({ fpDraft: { ...s.fpDraft, ...p } })),
+    saveFpProfile: () => {
+      const m = meRef.current || {}; if (!m.uid) return;
+      const d = ref.current.fpDraft, num = (v) => v === '' || v == null ? null : Number(v);
+      const row = { user_id: m.uid, height_cm: num(d.height_cm), weight_kg: num(d.weight_kg), birth_year: num(d.birth_year), sex: d.sex || null, stats_visible: !!d.stats_visible, updated_at: new Date().toISOString() };
+      patch(s => ({ fpEditOpen: false, fitProfiles: { ...s.fitProfiles, [m.uid]: row } }));
+      db(client.from('fitness_profiles').upsert(row));
+    },
     setBDraft: (p) => patch(s => ({ bDraft: { ...s.bDraft, ...p } })),
     // ── workout session builder (multi-exercise) ──
     setSession: (p) => patch(s => ({ wSession: { ...s.wSession, ...p } })),
@@ -379,6 +391,7 @@ function buildView(state, actions, opts) {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
     workouts: workoutsByDate, body: bodyByDate, sessions,
+    myProfile: me ? (state.fitProfiles[me.uid] || null) : null,
     workoutMetric: wMetric,
     lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
@@ -499,6 +512,38 @@ function EditWorkout({ v, primary }) {
         <div style={{ padding: '14px 22px 20px', display: 'flex', gap: 10 }}>
           <button onClick={() => { v.a.removeWorkout(v.s.wEditId); close(); }} style={{ flex: 1, background: '#f6ece9', color: '#b07a6e', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
           <button onClick={v.a.saveEditWorkout} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+        </div>
+      </Sheet>
+    </Overlay>
+  );
+}
+function FpEditModal({ v, primary }) {
+  if (!v.s.fpEditOpen) return null;
+  const d = v.s.fpDraft;
+  const lab = { fontSize: 10.5, fontWeight: 800, color: '#aaa093', marginBottom: 4, textTransform: 'uppercase' };
+  return (
+    <Overlay onClose={() => v.a.set({ fpEditOpen: false })}>
+      <Sheet stop={v.stop} maxWidth={400}>
+        <div style={{ padding: '22px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>My stats</h2><button onClick={() => v.a.set({ fpEditOpen: false })} aria-label="Close" style={closeX}>×</button></div>
+        <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}><div style={lab}>Height (cm)</div><input value={d.height_cm} onChange={(e) => v.a.setFpDraft({ height_cm: e.target.value })} type="number" inputMode="numeric" placeholder="170" style={fieldInput} /></div>
+            <div style={{ flex: 1 }}><div style={lab}>Weight (kg)</div><input value={d.weight_kg} onChange={(e) => v.a.setFpDraft({ weight_kg: e.target.value })} type="number" inputMode="decimal" placeholder="65" style={fieldInput} /></div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}><div style={lab}>Birth year</div><input value={d.birth_year} onChange={(e) => v.a.setFpDraft({ birth_year: e.target.value })} type="number" inputMode="numeric" placeholder="1995" style={fieldInput} /></div>
+            <div style={{ flex: 1.4 }}><div style={lab}>Sex</div>
+              <div style={{ display: 'flex', gap: 5 }}>{[{ k: 'male', l: 'Male' }, { k: 'female', l: 'Female' }, { k: '', l: '—' }].map(o => <button key={o.k} onClick={() => v.a.setFpDraft({ sex: o.k })} style={{ flex: 1, border: '1px solid ' + (d.sex === o.k ? primary : '#ece6db'), background: d.sex === o.k ? primary : '#fff', color: d.sex === o.k ? '#fff' : '#9a9186', borderRadius: 11, padding: '11px 4px', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>{o.l}</button>)}</div>
+            </div>
+          </div>
+          <button onClick={() => v.a.setFpDraft({ stats_visible: !d.stats_visible })} role="switch" aria-checked={d.stats_visible} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#fff', border: '1px solid #ece6db', borderRadius: 13, padding: '13px 15px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+            <span><div style={{ fontSize: 14, fontWeight: 800, color: '#3a352f' }}>Show my stats to others</div><div style={{ fontSize: 12, fontWeight: 600, color: '#9a9186', marginTop: 2 }}>Let others in this space see your height/weight/age/sex.</div></span>
+            <span style={{ flexShrink: 0, width: 46, height: 27, borderRadius: 999, background: d.stats_visible ? '#6f9c5a' : '#d8cfc0', position: 'relative', transition: 'background .15s' }}><span style={{ position: 'absolute', top: 3, left: d.stats_visible ? 22 : 3, width: 21, height: 21, borderRadius: '50%', background: '#fff', transition: 'left .15s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} /></span>
+          </button>
+        </div>
+        <div style={{ padding: '16px 22px 22px', display: 'flex', gap: 10 }}>
+          <button onClick={() => v.a.set({ fpEditOpen: false })} style={cancelBtn}>Cancel</button>
+          <button onClick={v.a.saveFpProfile} style={{ flex: 1.4, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
         </div>
       </Sheet>
     </Overlay>
@@ -888,6 +933,21 @@ function Board({ v, isDesktop, primary, partner }) {
         </Fragment>
       ) : (
         <Fragment>
+          {(() => { const p = v.myProfile || {}; const age = p.birth_year ? (new Date().getFullYear() - p.birth_year) : null; const sexL = { male: 'Male', female: 'Female' }[p.sex] || '—'; const St = ({ label, val }) => <div style={{ minWidth: 56 }}><div style={{ fontSize: 10.5, fontWeight: 800, color: '#aaa093', letterSpacing: '.4px', textTransform: 'uppercase' }}>{label}</div><div style={{ fontSize: 16, fontWeight: 800, color: '#3a352f', marginTop: 1 }}>{val}</div></div>; return (
+            <div style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={upper}>My stats</span>
+                <button onClick={v.a.openFpEdit} style={{ border: '1px solid #e6ded2', background: '#fff', color: '#7a7166', borderRadius: 9, padding: '6px 12px', fontSize: 12.5, fontFamily: 'inherit', fontWeight: 800, cursor: 'pointer' }}>{v.myProfile ? 'Edit' : '+ Add'}</button>
+              </div>
+              <div style={{ display: 'flex', gap: 16, marginTop: 11, flexWrap: 'wrap' }}>
+                <St label="Height" val={p.height_cm ? p.height_cm + ' cm' : '—'} />
+                <St label="Weight" val={p.weight_kg ? p.weight_kg + ' kg' : '—'} />
+                <St label="Age" val={age || '—'} />
+                <St label="Sex" val={sexL} />
+              </div>
+              <div style={{ marginTop: 10, fontSize: 12, color: '#9a9186', fontWeight: 700 }}>{p.stats_visible === false ? '🙈 Hidden from others in this space' : '👀 Visible to your space'}</div>
+            </div>
+          ); })()}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
               <span style={upper}>Trend</span>
@@ -947,7 +1007,7 @@ function BoardShell({ sx }) {
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
-      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />{v.s.photoCompare && <PhotoCompare v={v} />}
+      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><FpEditModal v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />{v.s.photoCompare && <PhotoCompare v={v} />}
       <TweaksPanel title="Tweaks"><TweakSection label="People"><TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)} options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} /><TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)} options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} /></TweakSection></TweaksPanel>
     </div>
   );
