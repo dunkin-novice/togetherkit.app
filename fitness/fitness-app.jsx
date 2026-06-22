@@ -87,6 +87,10 @@ const STARTERS = [
   { name: 'Push', exercises: [{ ex: 'Bench Press', sets: 4, reps: 6 }, { ex: 'Overhead Press', sets: 3, reps: 8 }, { ex: 'Incline Bench Press', sets: 3, reps: 10 }, { ex: 'Lateral Raise', sets: 3, reps: 15 }, { ex: 'Tricep Pushdown', sets: 3, reps: 12 }] },
   { name: 'Pull', exercises: [{ ex: 'Deadlift', sets: 3, reps: 5 }, { ex: 'Pull-up', sets: 3, reps: 8 }, { ex: 'Barbell Row', sets: 3, reps: 8 }, { ex: 'Lat Pulldown', sets: 3, reps: 12 }, { ex: 'Bicep Curl', sets: 3, reps: 12 }] },
   { name: 'Legs', exercises: [{ ex: 'Squat', sets: 4, reps: 6 }, { ex: 'Leg Press', sets: 3, reps: 10 }, { ex: 'Lunge', sets: 3, reps: 10 }, { ex: 'Leg Curl', sets: 3, reps: 12 }, { ex: 'Calf Raise', sets: 4, reps: 15 }] },
+  { name: 'StrongLifts 5×5', exercises: [{ ex: 'Squat', sets: 5, reps: 5 }, { ex: 'Bench Press', sets: 5, reps: 5 }, { ex: 'Barbell Row', sets: 5, reps: 5 }] },
+  { name: 'Glutes & Core', exercises: [{ ex: 'Hip Thrust', sets: 4, reps: 10 }, { ex: 'Romanian Deadlift', sets: 3, reps: 10 }, { ex: 'Bulgarian Split Squat', sets: 3, reps: 12 }, { ex: 'Glute Bridge', sets: 3, reps: 15 }, { ex: 'Hanging Leg Raise', sets: 3, reps: 12 }, { ex: 'Plank', sets: 3, reps: 1 }] },
+  { name: 'Dumbbell Day', exercises: [{ ex: 'Dumbbell Press', sets: 4, reps: 10 }, { ex: 'Dumbbell Row', sets: 4, reps: 10 }, { ex: 'Dumbbell Shoulder Press', sets: 3, reps: 10 }, { ex: 'Goblet Squat', sets: 3, reps: 12 }, { ex: 'Bicep Curl', sets: 3, reps: 12 }, { ex: 'Hammer Curl', sets: 3, reps: 12 }] },
+  { name: 'Functional / HYROX', exercises: [{ ex: 'Thruster', sets: 4, reps: 12 }, { ex: 'Kettlebell Swing', sets: 4, reps: 15 }, { ex: 'Box Jump', sets: 4, reps: 10 }, { ex: 'Burpee', sets: 4, reps: 12 }, { ex: "Farmer's Walk", sets: 3, reps: 1 }, { ex: 'Wall Balls', sets: 3, reps: 20 }] },
 ];
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const shortDate = (s) => { if (!s) return ''; const p = String(s).split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; };
