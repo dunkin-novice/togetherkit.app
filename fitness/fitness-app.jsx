@@ -76,7 +76,7 @@ function useFitnessStore(homespaceId, me) {
   const BE = window.TogetherBackend; const { client } = BE;
   const [state, setState] = useState(() => ({
     tab: 'workouts', workouts: [], body: [], routines: [], reactions: [], syncing: true,
-    routineModal: false, routineEdit: null, reactOpen: null, rest: null,
+    routineModal: false, routineEdit: null, reactOpen: null, rest: null, sessionOpen: null,
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', photo: null, date: today(), advanced: false },
@@ -357,10 +357,28 @@ function buildView(state, actions, opts) {
   state.workouts.forEach(w => { if (ts(w.date) < weekAgo) return; const g = groupOf(w.exercise); if (!g) return; const sets = w.sets || (w.setsDetail ? w.setsDetail.length : 1) || 1; mw2[g][w.byUser] = (mw2[g][w.byUser] || 0) + sets; });
   const muscleFocus = MUSCLE_GROUPS.map(g => ({ group: g, perPerson: comparePeople.map(p => ({ uid: p.uid, color: p.color, sets: mw2[g][p.uid] || 0 })), total: comparePeople.reduce((a, p) => a + (mw2[g][p.uid] || 0), 0) })).filter(x => x.total > 0);
 
+  // ── sessions: group each person's sets on a day into one "Chest Day"-style card ──
+  const exMusclesV = {}; (state.exLib || []).forEach(x => { exMusclesV[x.name.toLowerCase()] = x.muscles || []; });
+  const groupOfV = (name) => { const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
+  const itemVol = (w) => { if (w.setsDetail && w.setsDetail.length) return w.setsDetail.reduce((a, r) => a + ((Number(r.weight) || 0) * (Number(r.reps) || 0)), 0); const mw = maxW(w); return (mw || 0) * (Number(w.reps) || 0) * (w.sets || 1); };
+  const sessMap = {};
+  workoutsByDate.forEach(w => { const k = (w.byUser || 'x') + '|' + w.date; (sessMap[k] = sessMap[k] || { key: k, byUser: w.byUser, date: w.date, color: w.color, initial: w.initial, who: w.who, mine: w.mine, items: [] }).items.push(w); });
+  const sessions = Object.keys(sessMap).map(k => sessMap[k]).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(s => {
+    const counts = {}; s.items.forEach(w => { const g = groupOfV(w.exercise); if (g) counts[g] = (counts[g] || 0) + 1; });
+    const groups = Object.keys(counts).sort((a, b) => counts[b] - counts[a]); const total = s.items.length;
+    let title;
+    const dayName = { Legs: 'Leg', Shoulders: 'Shoulder', Arms: 'Arm' };
+    if (!groups.length) title = 'Workout';
+    else if (groups.length === 1 || counts[groups[0]] / total >= 0.6) title = (dayName[groups[0]] || groups[0]) + ' Day';
+    else if (groups.length <= 3) title = groups.slice(0, 2).join(' & ');
+    else title = 'Full Body';
+    const isPR = s.items.some(w => w.isPR);
+    return { ...s, title, isPR, count: s.items.length, volume: Math.round(s.items.reduce((a, w) => a + itemVol(w), 0)), preview: s.items.map(w => w.exercise).join(' · ') };
+  });
   return {
     s: state, a: actions, primary, partner, members, stop: (e) => e.stopPropagation(),
     exercisesLogged, graphExercise: ge, wSeries, bSeries, bodyMetric: metric,
-    workouts: workoutsByDate, body: bodyByDate,
+    workouts: workoutsByDate, body: bodyByDate, sessions,
     workoutMetric: wMetric,
     lastFor: (ex) => { if (!me || !ex) return null; const mine = state.workouts.filter(w => w.byUser === me.uid && w.exercise === ex); return mine.length ? mine.reduce((a, w) => (w.date > a.date ? w : a), mine[0]) : null; },
     bestE1rm: (ex) => { const all = state.workouts.filter(w => w.exercise === (ex || ge)).map(e1rmOf).filter(x => x != null); return all.length ? round1(Math.max(...all)) : null; },
@@ -752,22 +770,68 @@ function PhotoCompare({ v }) {
     </Overlay>
   );
 }
+function SessionsView({ v }) {
+  const sessions = v.sessions || [];
+  const open = v.s.sessionOpen ? sessions.find(s => s.key === v.s.sessionOpen) : null;
+  return (
+    <Fragment>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {sessions.map(s => (
+          <div key={s.key} onClick={() => v.a.set({ sessionOpen: s.key })} style={{ ...card, padding: '14px 16px', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: '#3a352f', fontFamily: "'Quicksand',sans-serif" }}>{s.title}</span>
+                  {s.isPR && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 7px', borderRadius: 999 }}>🏆 PR</span>}
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186', marginTop: 2 }}>{s.count} exercise{s.count === 1 ? '' : 's'}{s.volume > 0 ? ' · ' + s.volume.toLocaleString() + ' vol' : ''}</div>
+              </div>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#9a9186', flexShrink: 0 }}><Avi color={s.color} initial={s.initial} />{shortDate(s.date)}</span>
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#b3a99c', marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.preview}</div>
+          </div>
+        ))}
+        {!v.s.syncing && sessions.length === 0 && <div style={{ textAlign: 'center', padding: '34px 10px', color: '#b3a99c', fontWeight: 600, fontSize: 14 }}>No workouts yet — log a few sets and they’ll group into days here.</div>}
+      </div>
+      {open && (
+        <Overlay onClose={() => v.a.set({ sessionOpen: null })}>
+          <Sheet stop={v.stop} maxWidth={420}>
+            <div style={{ padding: '20px 22px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div><h2 style={modalTitle}>{open.title}</h2><div style={{ fontSize: 12.5, fontWeight: 700, color: '#9a9186', marginTop: 3 }}>{open.who} · {shortDate(open.date)} · {open.count} exercise{open.count === 1 ? '' : 's'}{open.volume > 0 ? ' · ' + open.volume.toLocaleString() + ' vol' : ''}</div></div>
+              <button onClick={() => v.a.set({ sessionOpen: null })} aria-label="Close" style={closeX}>×</button>
+            </div>
+            <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px 22px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {open.items.map(w => (
+                <div key={w.id} style={{ background: '#fff', border: '1px solid #f0ebe2', borderRadius: 13, padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 14.5, fontWeight: 800, color: '#3a352f' }}>{w.exercise}</span>{w.isPR && <span style={{ fontSize: 10, fontWeight: 800, color: '#a8822f', background: '#f6edd6', padding: '2px 6px', borderRadius: 999 }}>🏆</span>}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7a7166', marginTop: 2 }}>{w.summary}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Sheet>
+        </Overlay>
+      )}
+    </Fragment>
+  );
+}
 function Board({ v, isDesktop, primary, partner }) {
   const tab = v.s.tab;
   const addBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: isDesktop ? '12px 22px' : 14, fontWeight: 800, fontSize: isDesktop ? 14.5 : 15, cursor: 'pointer', fontFamily: 'inherit', width: isDesktop ? 'auto' : '100%' };
-  const TabBtn = ({ id, label }) => <button onClick={() => v.a.set({ tab: id })} style={{ flex: 1, padding: '9px 8px', borderRadius: 11, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 13.5, background: tab === id ? '#fff' : 'transparent', color: tab === id ? '#3a352f' : '#9a9186', boxShadow: tab === id ? '0 1px 2px rgba(58,53,47,.06)' : 'none' }}>{label}</button>;
+  const TabBtn = ({ id, label }) => <button onClick={() => v.a.set({ tab: id })} style={{ flex: 1, padding: '9px 4px', borderRadius: 11, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 12.5, whiteSpace: 'nowrap', background: tab === id ? '#fff' : 'transparent', color: tab === id ? '#3a352f' : '#9a9186', boxShadow: tab === id ? '0 1px 2px rgba(58,53,47,.06)' : 'none' }}>{label}</button>;
   const legend = (series) => series.length > 1 && <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>{series.map((s, i) => <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#7a7166' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: s.color }} />{s.name}</span>)}</div>;
 
   return (
     <div style={{ padding: isDesktop ? '38px 44px 46px' : '28px 18px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 640, margin: '0 auto' }}>
       {isDesktop
-        ? <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} />{tab !== 'compare' && <button onClick={() => v.a.set(tab === 'workouts' ? { wAddOpen: true } : { bAddOpen: true })} style={addBtn}><FI.Plus size={17} />{tab === 'workouts' ? 'Log a set' : 'Log body stats'}</button>}</div>
+        ? <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}><Brand titleSize={34} subSize={15} dot={20} />{tab !== 'compare' && <button onClick={() => v.a.set(tab === 'body' ? { bAddOpen: true } : { wAddOpen: true })} style={addBtn}><FI.Plus size={17} />{tab === 'body' ? 'Log body stats' : 'Log a set'}</button>}</div>
         : <Fragment><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4 }}><Brand titleSize={30} subSize={13.5} dot={18} /></div></Fragment>}
 
-      <div style={{ display: 'flex', gap: 4, background: '#ece6db', borderRadius: 13, padding: 4 }}><TabBtn id="workouts" label="🏋️ Workouts" /><TabBtn id="body" label="📊 Body" /><TabBtn id="compare" label="🏆 Compare" /></div>
-      {!isDesktop && tab !== 'compare' && <button onClick={() => v.a.set(tab === 'workouts' ? { wAddOpen: true } : { bAddOpen: true })} style={addBtn}><FI.Plus size={16} />{tab === 'workouts' ? 'Log a set' : 'Log body stats'}</button>}
+      <div style={{ display: 'flex', gap: 4, background: '#ece6db', borderRadius: 13, padding: 4 }}><TabBtn id="workouts" label="🏋️ Log" /><TabBtn id="sessions" label="📅 Days" /><TabBtn id="body" label="📊 Body" /><TabBtn id="compare" label="🏆 Compare" /></div>
+      {!isDesktop && tab !== 'compare' && <button onClick={() => v.a.set(tab === 'body' ? { bAddOpen: true } : { wAddOpen: true })} style={addBtn}><FI.Plus size={16} />{tab === 'body' ? 'Log body stats' : 'Log a set'}</button>}
 
-      {tab === 'compare' ? <CompareSection v={v} /> : tab === 'workouts' ? (
+      {tab === 'sessions' ? <SessionsView v={v} /> : tab === 'compare' ? <CompareSection v={v} /> : tab === 'workouts' ? (
         <Fragment>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
             <button onClick={() => v.a.startRest(90)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}>⏱ Rest</button>
