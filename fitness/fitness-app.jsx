@@ -36,6 +36,10 @@ const HYROX_INFO = {
   'Sandbag Lunges': '100 m · ♂20 / ♀10 kg (Pro ♂30 / ♀20)',
   'Wall Balls': '100 reps · ♂6 / ♀4 kg (Pro ♂9 / ♀6)',
 };
+const HYROX_DIVISIONS = [{ k: 'open-m', l: 'Open ♂' }, { k: 'open-w', l: 'Open ♀' }, { k: 'pro-m', l: 'Pro ♂' }, { k: 'pro-w', l: 'Pro ♀' }];
+const divLabel = (k) => (HYROX_DIVISIONS.find(d => d.k === k) || {}).l || '';
+const parseClock = (str) => { if (str == null || str === '') return null; const parts = String(str).trim().split(':').map(n => parseInt(n, 10)); if (parts.some(isNaN)) return null; let sec = 0; if (parts.length === 3) sec = parts[0] * 3600 + parts[1] * 60 + parts[2]; else if (parts.length === 2) sec = parts[0] * 60 + parts[1]; else sec = parts[0]; return sec > 0 ? sec : null; };
+const fmtClock = (sec) => { sec = Math.round(sec || 0); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60; const pad = (n) => String(n).padStart(2, '0'); return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : m + ':' + pad(s); };
 const climbSummary = (grades) => {
   const keys = Object.keys(grades || {}).filter(g => Number(grades[g]) > 0).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
   if (!keys.length) return 'logged';
@@ -49,6 +53,7 @@ const LB_METRICS = [
   { key: 'sessionsWeek', label: 'Sessions', sub: 'this week', fmt: (v) => (v || 0) + '×' },
   { key: 'kcalWeek', label: 'Calories', sub: 'this week', fmt: (v) => '🔥 ' + (v || 0).toLocaleString() },
   { key: 'climbWeek', label: 'Climbing', sub: 'send points · this week', fmt: (v) => v ? v.toLocaleString() + ' pts' : '0' },
+  { key: 'hyroxBest', label: 'HYROX', sub: 'best race time', lowerBetter: true, fmt: (v) => v == null ? '—' : fmtClock(v) },
   { key: 'relStrength', label: 'Strength', sub: 'best 1RM ÷ bodyweight', fmt: (v) => v == null ? '—' : v + '×' },
   { key: 'fatImprov', label: 'Fat lost', sub: 'since first log', fmt: (v) => v == null ? '—' : (v > 0 ? '−' + v : (v < 0 ? '+' + (-v) : '0')) + '%' },
 ];
@@ -79,7 +84,7 @@ const STARTERS = [
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const shortDate = (s) => { if (!s) return ''; const p = String(s).split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; };
 
-const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, kind: r.kind || 'lifting', durationMin: r.duration_min, intensity: r.intensity || null, grades: r.grades || null, photo: r.photo || null, videoUrl: r.video_url || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
+const rowToW = (r) => ({ id: r.id, exercise: r.exercise, weight: r.weight, unit: r.unit || 'kg', reps: r.reps, sets: r.sets, setsDetail: r.sets_detail || null, kind: r.kind || 'lifting', durationMin: r.duration_min, intensity: r.intensity || null, grades: r.grades || null, race: r.race || null, photo: r.photo || null, videoUrl: r.video_url || null, date: r.log_date, byUser: r.by_user, byName: r.by_name });
 const rowToB = (r) => ({ id: r.id, date: r.log_date, weight: r.weight, unit: r.unit || 'kg', bodyFat: r.body_fat, muscleMass: r.muscle_mass, fatMass: r.fat_mass, photo: r.photo || null, byUser: r.by_user, byName: r.by_name });
 const rowToRoutine = (r) => ({ id: r.id, name: r.name, exercises: Array.isArray(r.exercises) ? r.exercises : [], byUser: r.by_user, byName: r.by_name });
 const emptyRRow = (unit) => ({ ex: '', sets: '', reps: '', weight: '', unit: unit || 'kg' });
@@ -106,6 +111,7 @@ let _actx = null;
 const beep = () => { try { _actx = _actx || new (window.AudioContext || window.webkitAudioContext)(); const o = _actx.createOscillator(), g = _actx.createGain(); o.connect(g); g.connect(_actx.destination); o.frequency.value = 880; g.gain.value = 0.07; o.start(); setTimeout(() => { o.frequency.value = 1100; }, 90); setTimeout(() => o.stop(), 200); } catch (e) {} };
 // summarise an entry for the list card
 const setsText = (w) => {
+  if (w.kind === 'hyrox') { const r = w.race || {}; return 'HYROX · ' + (r.totalSec ? fmtClock(r.totalSec) : '—') + (r.division ? ' · ' + divLabel(r.division) : ''); }
   if (w.kind === 'climb') return climbSummary(w.grades);
   if (w.kind === 'cardio') { const p = []; if (w.durationMin != null) p.push(w.durationMin + ' min'); if (w.intensity) p.push(w.intensity); return p.join(' · ') || 'logged'; }
   if (w.setsDetail && w.setsDetail.length) return w.setsDetail.map(s => (s.weight != null ? s.weight : '–') + '×' + (s.reps != null ? s.reps : '–') + (s.drop ? ' drop' : '')).join(', ');
@@ -121,6 +127,7 @@ function useFitnessStore(homespaceId, me) {
   const [state, setState] = useState(() => ({
     tab: 'workouts', workouts: [], body: [], routines: [], reactions: [], syncing: true,
     routineModal: false, routineEdit: null, reactOpen: null, rest: null, sessionOpen: null,
+    raceOpen: false, raceDraft: { division: 'open-m', total: '', date: today(), stations: {} },
     wAddOpen: false, wSession: { date: today(), blocks: [emptyWBlock('kg')] }, exFocusKey: null,
     wEditId: null, wEdit: null, prToast: null,
     bAddOpen: false, bDraft: { weight: '', unit: 'kg', bodyFat: '', muscleMass: '', fatMass: '', photo: null, date: today(), advanced: false },
@@ -252,6 +259,18 @@ function useFitnessStore(homespaceId, me) {
           ? { ...emptyWBlock(w.unit), ex: w.exercise, unit: w.unit, mode: 'detail', rows: w.setsDetail.map(r => ({ weight: r.weight == null ? '' : String(r.weight), reps: r.reps == null ? '' : String(r.reps), drop: !!r.drop })) }
           : { ...emptyWBlock(w.unit), ex: w.exercise, unit: w.unit, mode: 'simple', sets: w.sets == null ? '' : String(w.sets), reps: w.reps == null ? '' : String(w.reps), weight: w.weight == null ? '' : String(w.weight) });
       patch({ wSession: { date: today(), blocks: blocks.length ? blocks : [emptyWBlock('kg')] }, wAddOpen: true, exFocusKey: null });
+    },
+    openRace: () => patch({ raceOpen: true, raceDraft: { division: 'open-m', total: '', date: today(), stations: {} } }),
+    setRaceDraft: (p) => patch(s => ({ raceDraft: { ...s.raceDraft, ...p } })),
+    setRaceStation: (name, val) => patch(s => ({ raceDraft: { ...s.raceDraft, stations: { ...s.raceDraft.stations, [name]: val } } })),
+    saveRace: () => {
+      const s = ref.current, d = s.raceDraft, m = meRef.current || { uid: null, name: 'Me' };
+      const totalSec = parseClock(d.total); if (!totalSec) return;
+      const stations = {}; HYROX_STATIONS.forEach(n => { const sec = parseClock(d.stations[n]); if (sec) stations[n] = sec; });
+      const race = { totalSec, division: d.division, stations };
+      const w = { id: BE.newId(), exercise: 'HYROX Race', kind: 'hyrox', race, weight: null, unit: 'kg', reps: null, sets: null, setsDetail: null, date: d.date, byUser: m.uid, byName: m.name };
+      patch(st => ({ raceOpen: false, workouts: [...st.workouts, w].sort((a, b) => (a.date < b.date ? -1 : 1)) }));
+      db(client.from('fitness_logs').insert({ id: w.id, homespace_id: homespaceId, exercise: w.exercise, kind: 'hyrox', race, weight: null, unit: 'kg', log_date: w.date, by_user: m.uid, by_name: m.name, pos: Date.now() }));
     },
     duplicateWorkout: (id) => {
       const s = ref.current, m = meRef.current || { uid: null, name: 'Me' };
@@ -459,7 +478,7 @@ function buildView(state, actions, opts) {
 
   // ── sessions: group each person's sets on a day into one "Chest Day"-style card ──
   const exMusclesV = {}; (state.exLib || []).forEach(x => { exMusclesV[x.name.toLowerCase()] = x.muscles || []; });
-  const groupOfV = (name) => { if (HYROX_CAT[name]) return 'HYROX'; if (CLIMB_SET[name]) return 'Climb'; if (ACTIVITY_CAT[name]) return ACTIVITY_CAT[name]; const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
+  const groupOfV = (name) => { if (HYROX_CAT[name] || name === 'HYROX Race') return 'HYROX'; if (CLIMB_SET[name]) return 'Climb'; if (ACTIVITY_CAT[name]) return ACTIVITY_CAT[name]; const ms = exMusclesV[(name || '').toLowerCase()]; if (ms && ms.length) { const g = MUSCLE_GROUP[ms[0]]; if (g) return g; } return PRESET_GROUP[name] || null; };
   const itemVol = (w) => { if (w.setsDetail && w.setsDetail.length) return w.setsDetail.reduce((a, r) => a + ((Number(r.weight) || 0) * (Number(r.reps) || 0)), 0); const mw = maxW(w); return (mw || 0) * (Number(w.reps) || 0) * (w.sets || 1); };
   const sessMap = {};
   workoutsByDate.forEach(w => { const k = (w.byUser || 'x') + '|' + w.date; (sessMap[k] = sessMap[k] || { key: k, byUser: w.byUser, date: w.date, color: w.color, initial: w.initial, who: w.who, mine: w.mine, items: [] }).items.push(w); });
@@ -488,6 +507,7 @@ function buildView(state, actions, opts) {
       volumeWeek: Math.round(wk.reduce((a, w) => a + itemVol(w), 0)),
       kcalWeek: wk.reduce((a, w) => a + (calOf(w) || 0), 0),
       climbWeek: wk.reduce((a, w) => a + (w.kind === 'climb' ? climbPoints(w.grades || {}) : 0), 0),
+      hyroxBest: (() => { const ts2 = mine.filter(w => w.kind === 'hyrox' && w.race && w.race.totalSec).map(w => w.race.totalSec); return ts2.length ? Math.min(...ts2) : null; })(),
       sessionsWeek: ((weekDays.find(d => d.uid === p.uid) || {}).days) || 0,
       relStrength: (kg && e1rmMax > 0) ? Math.round((e1rmMax / kg) * 100) / 100 : null,
       fatImprov: fats.length >= 2 ? Math.round((fats[0].bodyFat - fats[fats.length - 1].bodyFat) * 10) / 10 : null,
@@ -866,7 +886,7 @@ function RoutineEditor({ v, primary }) {
 function LeaderboardModal({ v }) {
   const c = v.compare; const metricKey = v.s.lbMetric || 'volumeWeek';
   const meta = LB_METRICS.find(m => m.key === metricKey) || LB_METRICS[0];
-  const rows = (c.leaderboard || []).slice().sort((a, b) => { const av = a[metricKey], bv = b[metricKey]; if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; return bv - av; });
+  const rows = (c.leaderboard || []).slice().sort((a, b) => { const av = a[metricKey], bv = b[metricKey]; if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; return meta.lowerBetter ? av - bv : bv - av; });
   const medal = ['🥇', '🥈', '🥉'];
   const topVal = rows.length && rows[0][metricKey] != null ? rows[0][metricKey] : null;
   return (
@@ -1021,6 +1041,40 @@ function PhotoCompare({ v }) {
     </Overlay>
   );
 }
+function RaceModal({ v, primary }) {
+  if (!v.s.raceOpen) return null;
+  const d = v.s.raceDraft;
+  return (
+    <Overlay onClose={() => v.a.set({ raceOpen: false })}>
+      <Sheet stop={v.stop} maxWidth={400}>
+        <div style={{ padding: '22px 22px 10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}><h2 style={modalTitle}>🏆 Log HYROX race</h2><button onClick={() => v.a.set({ raceOpen: false })} aria-label="Close" style={closeX}>×</button></div>
+        <div className="tog-scroll" style={{ overflowY: 'auto', padding: '0 22px', display: 'flex', flexDirection: 'column', gap: 13 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 5, textTransform: 'uppercase' }}>Division</div>
+            <div style={{ display: 'flex', gap: 5 }}>{HYROX_DIVISIONS.map(o => <button key={o.k} onClick={() => v.a.setRaceDraft({ division: o.k })} style={{ flex: 1, border: '1px solid ' + (d.division === o.k ? primary : '#ece6db'), background: d.division === o.k ? primary : '#fff', color: d.division === o.k ? '#fff' : '#9a9186', borderRadius: 10, padding: '9px 4px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{o.l}</button>)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', marginBottom: 4, textTransform: 'uppercase' }}>Total time · your score</div>
+            <input value={d.total} onChange={(e) => v.a.setRaceDraft({ total: e.target.value })} onFocus={focusScroll} inputMode="numeric" placeholder="1:12:34" style={{ ...fieldInput, fontFamily: "'Quicksand',sans-serif", fontSize: 20, textAlign: 'center', fontWeight: 800 }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#b3a99c', margin: '5px 2px 0' }}>h:mm:ss (or mm:ss)</div>
+          </div>
+          <input value={d.date} onChange={(e) => v.a.setRaceDraft({ date: e.target.value })} type="date" style={fieldInput} />
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#aaa093', textTransform: 'uppercase', marginTop: 2 }}>Station splits · optional</div>
+          {HYROX_STATIONS.map((n, idx) => (
+            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#7a7166' }}>{idx + 1}. {n.replace('HYROX ', '')}</span>
+              <input value={d.stations[n] || ''} onChange={(e) => v.a.setRaceStation(n, e.target.value)} onFocus={focusScroll} inputMode="numeric" placeholder="mm:ss" style={{ ...numIn, width: 92, flex: 'none', textAlign: 'center' }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '14px 22px 20px', display: 'flex', gap: 10 }}>
+          <button onClick={() => v.a.set({ raceOpen: false })} style={cancelBtn}>Cancel</button>
+          <button onClick={v.a.saveRace} style={{ flex: 2, background: primary, color: '#fff', border: 'none', borderRadius: 14, padding: 13, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' }}>Save race</button>
+        </div>
+      </Sheet>
+    </Overlay>
+  );
+}
 function SessionsView({ v }) {
   const sessions = v.sessions || [];
   const open = v.s.sessionOpen ? sessions.find(s => s.key === v.s.sessionOpen) : null;
@@ -1092,6 +1146,7 @@ function Board({ v, isDesktop, primary, partner }) {
         <Fragment>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
             <button onClick={() => v.a.startRest(90)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}>⏱ Rest</button>
+            <button onClick={() => v.a.openRace()} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}>🏆 HYROX race</button>
             {v.s.routines.map(r => <button key={r.id} onClick={() => v.a.startRoutine(r.id)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #e6ded2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#3a352f', fontWeight: 800, cursor: 'pointer' }}><span style={{ color: primary }}>▶</span>{r.name}</button>)}
             <button onClick={() => v.a.set({ routineModal: true })} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed #cbb9a2', borderRadius: 999, padding: '8px 14px', fontSize: 13, fontFamily: 'inherit', color: '#a8794f', fontWeight: 800, cursor: 'pointer' }}>☰ Routines</button>
           </div>
@@ -1219,7 +1274,7 @@ function BoardShell({ sx }) {
       <HomeButton href="../" />
       <AccountButton sx={sx} onOpen={() => setAccountOpen(true)} />
       {accountOpen && <AccountSheet sx={sx} onClose={() => setAccountOpen(false)} />}
-      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><FpEditModal v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />{v.s.photoCompare && <PhotoCompare v={v} />}
+      <AddWorkout v={v} primary={primary} /><EditWorkout v={v} primary={primary} /><AddBody v={v} primary={primary} /><FpEditModal v={v} primary={primary} /><RaceModal v={v} primary={primary} /><RoutinesModal v={v} primary={primary} /><RoutineEditor v={v} primary={primary} />{v.s.photoCompare && <PhotoCompare v={v} />}
       <TweaksPanel title="Tweaks"><TweakSection label="People"><TweakColor label="Primary" value={tweaks.primaryColor} onChange={(c) => setTweak('primaryColor', c)} options={['#c98a5c', '#d97757', '#cf6a52', '#b07d42']} /><TweakColor label="Partner" value={tweaks.partnerColor} onChange={(c) => setTweak('partnerColor', c)} options={['#8a9b6e', '#6f8050', '#5e827b', '#7e6f86']} /></TweakSection></TweaksPanel>
     </div>
   );
